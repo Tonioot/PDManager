@@ -54,4 +54,4 @@ echo -e "${GREEN}${BOLD}PDManager started${RESET}"
 echo -e "  Panel: ${BLUE}http://localhost:${PORT}${RESET}"
 echo -e "\nPress Ctrl+C to stop\n"
 
-uvicorn main:app --host 0.0.0.0 --port "$PORT" --reload --reload-dir . --reload-include '*.py'
+uvicorn main:app --host 0.0.0.0 --port "$PORT"
