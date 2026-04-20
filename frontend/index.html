@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>PDManager — Dashboard</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="css/variables.css" />
+  <link rel="stylesheet" href="css/base.css" />
+  <link rel="stylesheet" href="css/components.css" />
+  <link rel="stylesheet" href="css/pages.css" />
+</head>
+<body>
+
+<div class="shell">
+
+  <!-- ─── Sidebar ──────────────────────────────────────────────────────── -->
+  <aside class="sidebar">
+    <div class="sidebar-logo">
+      <div class="logo-icon">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round">
+          <rect x="2" y="2" width="20" height="8" rx="2"/>
+          <rect x="2" y="14" width="20" height="8" rx="2"/>
+          <line x1="6" y1="6" x2="6.01" y2="6"/>
+          <line x1="6" y1="18" x2="6.01" y2="18"/>
+        </svg>
+      </div>
+      <div class="logo-text">
+        <div class="logo-title">PDManager</div>
+        <div class="logo-sub">Deployment Panel</div>
+      </div>
+    </div>
+
+    <nav class="sidebar-nav">
+      <a href="/" class="nav-item active">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+        Dashboard
+      </a>
+
+      <div class="sidebar-section-label">Applications</div>
+      <div id="sidebar-apps">
+        <div class="sidebar-apps-empty">Loading…</div>
+      </div>
+    </nav>
+
+    <!-- System stats -->
+    <div class="sys-stats">
+      <div class="sys-stats-title">System</div>
+
+      <div class="mini-stat" id="bar-cpu">
+        <div class="mini-stat-row">
+          <span>CPU</span>
+          <span class="val">—</span>
+        </div>
+        <div class="mini-bar"><div class="mini-bar-fill blue" style="width:0%"></div></div>
+      </div>
+
+      <div class="mini-stat" id="bar-ram">
+        <div class="mini-stat-row">
+          <span>RAM</span>
+          <span class="val">—</span>
+        </div>
+        <div class="mini-bar"><div class="mini-bar-fill purple" style="width:0%"></div></div>
+      </div>
+
+      <div class="mini-stat" id="bar-disk">
+        <div class="mini-stat-row">
+          <span>Disk</span>
+          <span class="val">—</span>
+        </div>
+        <div class="mini-bar"><div class="mini-bar-fill orange" style="width:0%"></div></div>
+      </div>
+    </div>
+
+    <div class="sidebar-footer">
+      <button class="sidebar-footer-btn" id="btn-install-service">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="2" y="2" width="20" height="8" rx="2"/><rect x="2" y="14" width="20" height="8" rx="2"/><line x1="6" y1="6" x2="6.01" y2="6"/><line x1="6" y1="18" x2="6.01" y2="18"/></svg>
+        Install System Service
+      </button>
+    </div>
+  </aside>
+
+  <!-- ─── Main ─────────────────────────────────────────────────────────── -->
+  <main class="main-content">
+
+    <div class="page-header">
+      <div class="page-header-row">
+        <div>
+          <div class="page-title">Dashboard</div>
+          <div class="page-sub">Manage your deployed applications</div>
+        </div>
+        <button class="btn btn-primary" id="btn-deploy">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          Deploy Application
+        </button>
+      </div>
+    </div>
+
+    <div class="page-body">
+
+      <!-- Stat strip -->
+      <div class="stat-strip">
+        <div class="card stat-card">
+          <div class="stat-icon blue">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>
+          </div>
+          <div>
+            <div class="stat-value" id="stat-total">0</div>
+            <div class="stat-label">Total Apps</div>
+          </div>
+        </div>
+
+        <div class="card stat-card">
+          <div class="stat-icon green">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="22,12 18,12 15,21 9,3 6,12 2,12"/></svg>
+          </div>
+          <div>
+            <div class="stat-value" id="stat-running">0</div>
+            <div class="stat-label">Running</div>
+          </div>
+        </div>
+
+        <div class="card stat-card">
+          <div class="stat-icon gray">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><rect x="3" y="3" width="18" height="18" rx="2"/></svg>
+          </div>
+          <div>
+            <div class="stat-value" id="stat-stopped">0</div>
+            <div class="stat-label">Stopped</div>
+          </div>
+        </div>
+
+        <div class="card stat-card">
+          <div class="stat-icon red">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="2" y="2" width="20" height="8" rx="2"/><rect x="2" y="14" width="20" height="8" rx="2"/></svg>
+          </div>
+          <div>
+            <div class="stat-value" id="stat-errors">0</div>
+            <div class="stat-label">Errors</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Apps grid -->
+      <div class="apps-grid" id="apps-grid">
+        <!-- Skeleton placeholders -->
+        <div class="card app-card">
+          <div class="skeleton" style="width:60%;height:18px;margin-bottom:8px"></div>
+          <div class="skeleton" style="width:40%;height:12px;margin-bottom:16px"></div>
+          <div class="skeleton" style="width:100%;height:32px"></div>
+        </div>
+      </div>
+
+    </div>
+  </main>
+
+</div>
+
+<div id="toast-container"></div>
+
+<script type="module">
+  import { initDashboard } from './js/dashboard.js';
+  import { initSidebar } from './js/sidebar.js';
+  initDashboard();
+  initSidebar();
+</script>
+</body>
+</html>
