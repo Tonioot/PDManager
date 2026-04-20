@@ -77,8 +77,14 @@ def _push_line(app_id: int, line: str) -> None:
         _main_loop.call_soon_threadsafe(q.put_nowait, line)
 
 
+def _safe_dir_name(name: str) -> str:
+    """Strip/replace characters that are invalid or problematic in file paths."""
+    import re
+    return re.sub(r'[^a-zA-Z0-9_-]', '_', name)
+
+
 def get_app_dir(app_name: str) -> str:
-    return os.path.join(APPS_BASE_DIR, app_name)
+    return os.path.join(APPS_BASE_DIR, _safe_dir_name(app_name))
 
 
 def detect_app_type(app_dir: str) -> tuple[str, str, Optional[int]]:
@@ -192,7 +198,7 @@ def start_app(app_id: int, app_name: str, command: str, working_dir: str, env_va
         env.update(env_vars)
 
     log_buffers[app_id] = deque(maxlen=5000)
-    log_path = os.path.join(os.path.expanduser("~/.pdmanager/logs"), f"{app_name}.log")
+    log_path = os.path.join(os.path.expanduser("~/.pdmanager/logs"), f"{_safe_dir_name(app_name)}.log")
     os.makedirs(os.path.dirname(log_path), exist_ok=True)
     log_file = open(log_path, "w")  # truncate: each start is a fresh session
 
@@ -302,7 +308,7 @@ def get_recent_logs(app_id: int, app_name: str, lines: int = 300) -> list[str]:
     if buf:
         return list(buf)[-lines:]
 
-    log_path = os.path.join(os.path.expanduser("~/.pdmanager/logs"), f"{app_name}.log")
+    log_path = os.path.join(os.path.expanduser("~/.pdmanager/logs"), f"{_safe_dir_name(app_name)}.log")
     if os.path.exists(log_path):
         with open(log_path) as f:
             all_lines = f.readlines()

@@ -18,8 +18,8 @@ server {{
     listen 443 ssl;
     server_name {domain};
 
-    ssl_certificate {ssl_cert};
-    ssl_certificate_key {ssl_key};
+    ssl_certificate "{ssl_cert}";
+    ssl_certificate_key "{ssl_key}";
     ssl_protocols TLSv1.2 TLSv1.3;
     ssl_ciphers HIGH:!aNULL:!MD5;
 
@@ -56,9 +56,16 @@ server {{
 """
 
 
+def _safe_name(app_name: str) -> str:
+    """Convert app name to a valid filename (replace spaces/special chars)."""
+    import re
+    return re.sub(r'[^a-zA-Z0-9_-]', '_', app_name).lower()
+
+
 def write_nginx_config(app_name: str, config: str) -> tuple[bool, str]:
-    config_path = os.path.join(NGINX_SITES_DIR, app_name)
-    enabled_path = os.path.join(NGINX_ENABLED_DIR, app_name)
+    safe = _safe_name(app_name)
+    config_path = os.path.join(NGINX_SITES_DIR, safe)
+    enabled_path = os.path.join(NGINX_ENABLED_DIR, safe)
 
     try:
         # Write via sudo tee (works without direct write permission)
@@ -92,8 +99,9 @@ def write_nginx_config(app_name: str, config: str) -> tuple[bool, str]:
 
 
 def remove_nginx_config(app_name: str) -> bool:
-    config_path = os.path.join(NGINX_SITES_DIR, app_name)
-    enabled_path = os.path.join(NGINX_ENABLED_DIR, app_name)
+    safe = _safe_name(app_name)
+    config_path = os.path.join(NGINX_SITES_DIR, safe)
+    enabled_path = os.path.join(NGINX_ENABLED_DIR, safe)
 
     removed = False
     for path in [enabled_path, config_path]:
