@@ -2,8 +2,11 @@ import asyncio
 import json
 import os
 import time as _time
+from collections import deque
 from contextlib import asynccontextmanager
 from typing import Optional
+
+import psutil
 
 from fastapi import Depends, FastAPI, File, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
@@ -29,6 +32,49 @@ _COOKIE_OPTS = dict(httponly=True, samesite="strict", path="/")
 _restart_history: dict[int, list[float]] = {}
 MAX_RESTARTS_PER_WINDOW = 5
 RESTART_WINDOW_SECONDS = 60
+
+
+# ── Background stats collector ────────────────────────────────────────────────
+async def _stats_collector():
+    """Collect process stats for all running apps every 2 s, push to subscribers."""
+    await asyncio.sleep(4)
+    while True:
+        try:
+            async with AsyncSessionLocal() as db:
+                result = await db.execute(
+                    select(Application).where(Application.status == "running")
+                )
+                apps = result.scalars().all()
+
+            async def _one(a):
+                if not a.pid:
+                    return
+                try:
+                    s = await asyncio.to_thread(pm.get_process_stats, a.pid)
+                    if not s:
+                        return
+                    mem = psutil.virtual_memory()
+                    data = {
+                        "status": "running",
+                        "pid": a.pid,
+                        **s,
+                        "system_cpu_percent": psutil.cpu_percent(interval=None),
+                        "system_memory_total_mb": round(mem.total / 1024 / 1024),
+                        "system_memory_used_mb":  round(mem.used  / 1024 / 1024),
+                        "system_memory_percent":  mem.percent,
+                    }
+                    pm._stats_history.setdefault(a.id, deque(maxlen=60)).append(data)
+                    pm._push_stat(a.id, data)
+                except Exception:
+                    pass
+
+            # Collect all apps concurrently — cpu_percent(interval=0.5) runs in threads
+            await asyncio.gather(*[_one(a) for a in apps])
+        except asyncio.CancelledError:
+            return
+        except Exception:
+            pass
+        await asyncio.sleep(2)
 
 
 # ── Crash monitor ─────────────────────────────────────────────────────────────
@@ -133,13 +179,15 @@ async def lifespan(app: FastAPI):
 
         await db.commit()
 
-    monitor_task = asyncio.create_task(_crash_monitor())
+    monitor_task  = asyncio.create_task(_crash_monitor())
+    stats_task    = asyncio.create_task(_stats_collector())
     yield
-    monitor_task.cancel()
-    try:
-        await monitor_task
-    except asyncio.CancelledError:
-        pass
+    for task in (monitor_task, stats_task):
+        task.cancel()
+        try:
+            await task
+        except asyncio.CancelledError:
+            pass
 
 
 # ── App ───────────────────────────────────────────────────────────────────────

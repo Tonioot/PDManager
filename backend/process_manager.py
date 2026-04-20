@@ -29,10 +29,44 @@ running_processes: dict[int, subprocess.Popen] = {}
 # Survives PDManager restarts so we can recover orphaned processes
 _pid_registry: dict[int, dict] = {}
 
+# Stats history: last 60 snapshots per app (~2 min at 2s interval)
+_stats_history: dict[int, deque] = {}
+_stats_queues: dict[int, list[asyncio.Queue]] = {}
+_stats_queues_lock = threading.Lock()
+
 
 def set_main_loop(loop: asyncio.AbstractEventLoop) -> None:
     global _main_loop
     _main_loop = loop
+
+
+def subscribe_stats(app_id: int) -> asyncio.Queue:
+    q: asyncio.Queue = asyncio.Queue()
+    with _stats_queues_lock:
+        _stats_queues.setdefault(app_id, []).append(q)
+    return q
+
+
+def unsubscribe_stats(app_id: int, q: asyncio.Queue) -> None:
+    with _stats_queues_lock:
+        queues = _stats_queues.get(app_id, [])
+        try:
+            queues.remove(q)
+        except ValueError:
+            pass
+
+
+def _push_stat(app_id: int, data: dict) -> None:
+    if _main_loop is None or _main_loop.is_closed():
+        return
+    with _stats_queues_lock:
+        queues = list(_stats_queues.get(app_id, []))
+    for q in queues:
+        _main_loop.call_soon_threadsafe(q.put_nowait, data)
+
+
+def get_recent_stats(app_id: int) -> list[dict]:
+    return list(_stats_history.get(app_id, []))
 
 
 def load_registry() -> None:
@@ -178,16 +212,31 @@ def find_process_by_port(port: int) -> Optional[int]:
 def get_process_stats(pid: int) -> dict:
     try:
         proc = psutil.Process(pid)
-        with proc.oneshot():
-            cpu = proc.cpu_percent(interval=0.1)
-            mem = proc.memory_info()
-            uptime = int(time.time() - proc.create_time())
-            return {
-                "cpu_percent": cpu,
-                "memory_mb": round(mem.rss / 1024 / 1024, 2),
-                "uptime_seconds": uptime,
-                "status": proc.status(),
-            }
+        # cpu_percent must be called outside oneshot(); interval=0.5 gives a real measurement
+        cpu = proc.cpu_percent(interval=0.5)
+        mem = proc.memory_info()
+        uptime = int(time.time() - proc.create_time())
+
+        try:
+            num_threads = proc.num_threads()
+        except Exception:
+            num_threads = 0
+
+        try:
+            conns = proc.connections() if hasattr(proc, 'connections') else proc.net_connections()
+            num_connections = len(conns)
+        except Exception:
+            num_connections = 0
+
+        return {
+            "cpu_percent": cpu,
+            "memory_mb": round(mem.rss / 1024 / 1024, 2),
+            "memory_vms_mb": round(mem.vms / 1024 / 1024, 2),
+            "uptime_seconds": uptime,
+            "status": proc.status(),
+            "num_threads": num_threads,
+            "num_connections": num_connections,
+        }
     except (psutil.NoSuchProcess, psutil.AccessDenied):
         return {}
 
@@ -198,6 +247,7 @@ def start_app(app_id: int, app_name: str, command: str, working_dir: str, env_va
         env.update(env_vars)
 
     log_buffers[app_id] = deque(maxlen=5000)
+    _stats_history.pop(app_id, None)  # fresh process = fresh history
     log_path = os.path.join(os.path.expanduser("~/.pdmanager/logs"), f"{_safe_dir_name(app_name)}.log")
     os.makedirs(os.path.dirname(log_path), exist_ok=True)
     log_file = open(log_path, "w")  # truncate: each start is a fresh session

@@ -28,14 +28,20 @@ export const icon = {
   memory:    `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 19v-3"/><path d="M10 19v-3"/><path d="M14 19v-3"/><path d="M18 19v-3"/><path d="M8 11V9"/><path d="M16 11V9"/><path d="M12 11V9"/><path d="M2 15h20"/><path d="M2 7a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v1.1a2 2 0 0 0 0 3.837V17a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2v-5.1a2 2 0 0 0 0-3.8V7z"/></svg>`,
 };
 
-/* ─── Type emoji map ────────────────────────────────────────────────────── */
+/* ─── App type SVG icons ─────────────────────────────────────────────────── */
+/* viewBox is always 26×26; rendered at whatever size the container needs.   */
+const _typeIconSvg = (body) =>
+  `<svg viewBox="0 0 26 26" fill="none" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:100%;display:block">${body}</svg>`;
+
 export const typeIcon = {
-  nodejs:  '⬡',
-  python:  '🐍',
-  ruby:    '💎',
-  go:      '🔵',
-  php:     '🐘',
-  unknown: '📦',
+  // Plain green hexagon — the Node.js logo shape
+  nodejs:  _typeIconSvg(`<rect width="26" height="26" rx="6" fill="#0a2010"/><polygon points="13,3 21.5,8 21.5,18 13,23 4.5,18 4.5,8" fill="#3a8c30"/>`),
+  // Python logo paths (32×32 viewBox scaled via nested svg; solid fills to avoid gradient-ID collisions)
+  python:  `<svg viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:100%;display:block"><path fill-rule="evenodd" clip-rule="evenodd" d="M13.0164 2C10.8193 2 9.03825 3.72453 9.03825 5.85185V8.51852H15.9235V9.25926H5.97814C3.78107 9.25926 2 10.9838 2 13.1111L2 18.8889C2 21.0162 3.78107 22.7407 5.97814 22.7407H8.27322V19.4815C8.27322 17.3542 10.0543 15.6296 12.2514 15.6296H19.5956C21.4547 15.6296 22.9617 14.1704 22.9617 12.3704V5.85185C22.9617 3.72453 21.1807 2 18.9836 2H13.0164ZM12.0984 6.74074C12.8589 6.74074 13.4754 6.14378 13.4754 5.40741C13.4754 4.67103 12.8589 4.07407 12.0984 4.07407C11.3378 4.07407 10.7213 4.67103 10.7213 5.40741C10.7213 6.14378 11.3378 6.74074 12.0984 6.74074Z" fill="#327EBD"/><path fill-rule="evenodd" clip-rule="evenodd" d="M18.9834 30C21.1805 30 22.9616 28.2755 22.9616 26.1482V23.4815L16.0763 23.4815L16.0763 22.7408L26.0217 22.7408C28.2188 22.7408 29.9998 21.0162 29.9998 18.8889V13.1111C29.9998 10.9838 28.2188 9.25928 26.0217 9.25928L23.7266 9.25928V12.5185C23.7266 14.6459 21.9455 16.3704 19.7485 16.3704L12.4042 16.3704C10.5451 16.3704 9.03809 17.8296 9.03809 19.6296L9.03809 26.1482C9.03809 28.2755 10.8192 30 13.0162 30H18.9834ZM19.9015 25.2593C19.1409 25.2593 18.5244 25.8562 18.5244 26.5926C18.5244 27.329 19.1409 27.9259 19.9015 27.9259C20.662 27.9259 21.2785 27.329 21.2785 26.5926C21.2785 25.8562 20.662 25.2593 19.9015 25.2593Z" fill="#FFD43B"/></svg>`,
+  ruby:    _typeIconSvg(`<rect width="26" height="26" rx="6" fill="#3a0e0e"/><polygon points="13,3.5 21.5,9 18.5,21.5 7.5,21.5 4.5,9" fill="#cc342d"/><polygon points="13,7 18,10.5 15.5,19 10.5,19 8,10.5" fill="#e86060" opacity=".7"/>`),
+  go:      _typeIconSvg(`<rect width="26" height="26" rx="6" fill="#062533"/><text x="13" y="17.5" text-anchor="middle" fill="#00ADD8" font-size="11" font-weight="800" font-family="Arial,sans-serif">Go</text>`),
+  php:     _typeIconSvg(`<rect width="26" height="26" rx="6" fill="#1e1b4b"/><text x="13" y="16.5" text-anchor="middle" fill="#a5b4fc" font-size="8" font-weight="700" font-family="Arial,sans-serif">PHP</text>`),
+  unknown: _typeIconSvg(`<rect width="26" height="26" rx="6" fill="#21262d"/><path d="M13 8c-2.2 0-4 1.6-4 3.5h2.2c0-.8.8-1.5 1.8-1.5s1.8.6 1.8 1.5c0 1-1.8 2.2-1.8 3.5h2.2c0-1 1.8-2.2 1.8-3.5 0-1.9-1.8-3.5-4-3.5z" fill="#6e7681"/><circle cx="13" cy="18.5" r="1.2" fill="#6e7681"/>`),
 };
 
 /* ─── Status badge HTML ─────────────────────────────────────────────────── */

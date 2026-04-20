@@ -108,7 +108,7 @@ function appCardHTML(app) {
     <div class="card app-card" id="card-${app.id}">
       <div class="app-card-top">
         <div class="app-card-identity">
-          <div class="app-type-icon">${typeIcon[app.app_type] || '📦'}</div>
+          <div class="app-type-icon">${typeIcon[app.app_type] || typeIcon.unknown}</div>
           <div>
             <div class="app-name">${app.name}</div>
             <div class="app-type-label">${app.app_type || 'unknown'}</div>

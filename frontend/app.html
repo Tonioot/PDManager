@@ -93,7 +93,7 @@
 
       <div class="detail-hero">
         <div class="detail-identity">
-          <div class="detail-type-icon" id="app-type-icon">📦</div>
+          <div class="detail-type-icon" id="app-type-icon"></div>
           <div>
             <div class="detail-name-row">
               <div class="detail-name" id="app-name">Loading…</div>
@@ -165,6 +165,8 @@
           </div>
 
           <div id="stats-content" style="display:none">
+
+            <!-- Row 1: key process metrics -->
             <div class="stats-strip">
               <div class="stat-box blue">
                 <div class="stat-box-label">CPU Usage</div>
@@ -172,9 +174,9 @@
                 <div class="stat-box-sub">Process</div>
               </div>
               <div class="stat-box purple">
-                <div class="stat-box-label">Memory</div>
+                <div class="stat-box-label">Memory RSS</div>
                 <div class="stat-box-value" id="s-mem">—</div>
-                <div class="stat-box-sub">RSS</div>
+                <div class="stat-box-sub">Physical</div>
               </div>
               <div class="stat-box green">
                 <div class="stat-box-label">Uptime</div>
@@ -184,10 +186,35 @@
               <div class="stat-box orange">
                 <div class="stat-box-label">System CPU</div>
                 <div class="stat-box-value" id="s-syscpu">—</div>
-                <div class="stat-box-sub">Total</div>
+                <div class="stat-box-sub">Total load</div>
               </div>
             </div>
 
+            <!-- Row 2: process details -->
+            <div class="stats-strip" style="margin-top:12px">
+              <div class="stat-box stat-box-neutral">
+                <div class="stat-box-label">PID</div>
+                <div class="stat-box-value stat-box-value-sm" id="s-pid">—</div>
+                <div class="stat-box-sub">Process ID</div>
+              </div>
+              <div class="stat-box stat-box-neutral">
+                <div class="stat-box-label">Threads</div>
+                <div class="stat-box-value stat-box-value-sm" id="s-threads">—</div>
+                <div class="stat-box-sub">Active</div>
+              </div>
+              <div class="stat-box stat-box-neutral">
+                <div class="stat-box-label">Connections</div>
+                <div class="stat-box-value stat-box-value-sm" id="s-conns">—</div>
+                <div class="stat-box-sub">Open sockets</div>
+              </div>
+              <div class="stat-box stat-box-neutral">
+                <div class="stat-box-label">Virtual Mem</div>
+                <div class="stat-box-value stat-box-value-sm" id="s-vms">—</div>
+                <div class="stat-box-sub">VMS total</div>
+              </div>
+            </div>
+
+            <!-- Charts -->
             <div class="charts-row">
               <div class="card chart-card">
                 <div class="chart-title">CPU % over time</div>
@@ -199,6 +226,7 @@
               </div>
             </div>
 
+            <!-- System memory bar -->
             <div class="card" style="padding:18px">
               <div class="chart-title">System Memory</div>
               <div class="sys-mem-bar-wrap">
@@ -212,6 +240,7 @@
                 <div style="font-size:11px;color:var(--text-muted);margin-top:4px" id="sys-mem-pct">—</div>
               </div>
             </div>
+
           </div>
 
         </div>

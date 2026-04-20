@@ -12,6 +12,7 @@ let chartCpu = null;
 let chartMem = null;
 let cpuData = [];
 let memData = [];
+let statsTabActive = false;
 
 /* ─── Init ──────────────────────────────────────────────────────────────── */
 export async function initApp() {
@@ -34,6 +35,7 @@ export async function initApp() {
 
   renderHeader();
   initTabs();
+  startBgStats();          // Collect stats in the background from the start
   setInterval(refreshApp, 6000);
 }
 
@@ -51,6 +53,10 @@ function renderHeader() {
   document.title = `${app.name} — PDManager`;
   document.getElementById('app-meta').textContent =
     `${app.app_type || 'unknown'} · Port ${app.port || 'N/A'}`;
+
+  const typeIconEl = document.getElementById('app-type-icon');
+  if (typeIconEl) typeIconEl.innerHTML = typeIcon[app.app_type] || typeIcon.unknown;
+
   updateHeaderStatus();
 
   document.getElementById('btn-start').addEventListener('click',   () => quickAction('start'));
@@ -95,8 +101,10 @@ async function quickAction(action) {
   try {
     const fns = { start: api.start, stop: api.stop, restart: api.restart };
     await fns[action](APP_ID);
-    // Keep transitional badge visible while the process actually loads
+    // Clear chart history on start/restart — new process = fresh data
     if (action === 'start' || action === 'restart') {
+      cpuData = [];
+      memData = [];
       await new Promise(r => setTimeout(r, 2500));
     }
     app = await api.getApp(APP_ID);
@@ -143,8 +151,8 @@ function switchTab(t) {
 }
 
 function teardownTab(t) {
-  if (t === 'logs'  && logWs)  { logWs.close();  logWs  = null; }
-  if (t === 'stats' && statWs) { statWs.close(); statWs = null; }
+  if (t === 'logs'  && logWs) { logWs.close(); logWs = null; }
+  if (t === 'stats') { statsTabActive = false; } // Keep statWs alive — data keeps accumulating
 }
 
 function setupTab(t) {
@@ -185,45 +193,66 @@ function escHtml(s) {
   return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 }
 
-/* ─── STATS ─────────────────────────────────────────────────────────────── */
-function initStats() {
-  cpuData = [];
-  memData = [];
+/* ─── STATS — background collection ─────────────────────────────────────── */
+function startBgStats() {
+  statWs = wsStats(APP_ID, handleStatData);
+}
+
+function handleStatData(data) {
+  if (data.status === 'stopped') {
+    if (statsTabActive) {
+      document.getElementById('stats-stopped').style.display = 'flex';
+      document.getElementById('stats-content').style.display = 'none';
+    }
+    return;
+  }
+
+  // Always accumulate — even while on a different tab
+  const now = new Date().toLocaleTimeString('nl', { hour:'2-digit', minute:'2-digit', second:'2-digit' });
+  cpuData.push({ t: now, v: data.cpu_percent || 0 });
+  memData.push({ t: now, v: data.memory_mb   || 0 });
+  if (cpuData.length > 60) { cpuData.shift(); memData.shift(); }
+
+  if (!statsTabActive) return;
 
   document.getElementById('stats-stopped').style.display = 'none';
-  document.getElementById('stats-content').style.display = 'none';
+  document.getElementById('stats-content').style.display = 'block';
+
+  document.getElementById('s-cpu').textContent    = `${(data.cpu_percent || 0).toFixed(1)}%`;
+  document.getElementById('s-mem').textContent    = `${(data.memory_mb   || 0).toFixed(0)} MB`;
+  document.getElementById('s-uptime').textContent = fmtUptime(data.uptime_seconds || 0);
+  document.getElementById('s-syscpu').textContent = `${(data.system_cpu_percent || 0).toFixed(1)}%`;
+
+  document.getElementById('s-pid').textContent     = data.pid ?? '—';
+  document.getElementById('s-threads').textContent = data.num_threads ?? '—';
+  document.getElementById('s-conns').textContent   = data.num_connections ?? '—';
+  document.getElementById('s-vms').textContent     = `${(data.memory_vms_mb || 0).toFixed(0)} MB`;
+
+  const sysMem = data.system_memory_percent || 0;
+  document.getElementById('sys-mem-fill').style.width = `${sysMem}%`;
+  document.getElementById('sys-mem-used').textContent  = `${(data.system_memory_used_mb  || 0).toFixed(0)} MB used`;
+  document.getElementById('sys-mem-total').textContent = `${(data.system_memory_total_mb || 0).toFixed(0)} MB total`;
+  document.getElementById('sys-mem-pct').textContent   = `${sysMem.toFixed(1)}%`;
+
+  updateChart(chartCpu, cpuData);
+  updateChart(chartMem, memData);
+}
+
+function initStats() {
+  statsTabActive = true;
 
   initCharts();
 
-  statWs = wsStats(APP_ID, data => {
-    if (data.status === 'stopped') {
-      document.getElementById('stats-stopped').style.display = 'flex';
-      document.getElementById('stats-content').style.display = 'none';
-      return;
-    }
-
+  // Render whatever history is already accumulated
+  if (cpuData.length > 0) {
     document.getElementById('stats-stopped').style.display = 'none';
     document.getElementById('stats-content').style.display = 'block';
-
-    document.getElementById('s-cpu').textContent    = `${(data.cpu_percent || 0).toFixed(1)}%`;
-    document.getElementById('s-mem').textContent    = `${(data.memory_mb   || 0).toFixed(0)} MB`;
-    document.getElementById('s-uptime').textContent = fmtUptime(data.uptime_seconds || 0);
-    document.getElementById('s-syscpu').textContent = `${(data.system_cpu_percent || 0).toFixed(1)}%`;
-
-    const sysMem = data.system_memory_percent || 0;
-    document.getElementById('sys-mem-fill').style.width = `${sysMem}%`;
-    document.getElementById('sys-mem-used').textContent  = `${(data.system_memory_used_mb  || 0).toFixed(0)} MB used`;
-    document.getElementById('sys-mem-total').textContent = `${(data.system_memory_total_mb || 0).toFixed(0)} MB total`;
-    document.getElementById('sys-mem-pct').textContent   = `${sysMem.toFixed(1)}%`;
-
-    const now = new Date().toLocaleTimeString('nl', { hour:'2-digit', minute:'2-digit', second:'2-digit' });
-    cpuData.push({ t: now, v: data.cpu_percent || 0 });
-    memData.push({ t: now, v: data.memory_mb   || 0 });
-    if (cpuData.length > 60) { cpuData.shift(); memData.shift(); }
-
     updateChart(chartCpu, cpuData);
     updateChart(chartMem, memData);
-  });
+  } else {
+    document.getElementById('stats-stopped').style.display = 'none';
+    document.getElementById('stats-content').style.display = 'none';
+  }
 }
 
 function initCharts() {
@@ -257,12 +286,18 @@ function drawSparkline(ctx, canvas, data, color, unit) {
   if (data.length < 2) return;
 
   const vals = data.map(d => d.v);
-  const min  = Math.min(...vals);
-  const max  = Math.max(...vals) || 1;
-  const pad  = 6 * dpr;
+  const dataMin = Math.min(...vals);
+  const dataMax = Math.max(...vals);
+  const range   = dataMax - dataMin;
+  const pad     = 6 * dpr;
 
-  const xStep = (W - pad * 2) / (data.length - 1);
-  const yScale = d => H - pad - ((d - min) / (max - min || 1)) * (H - pad * 2);
+  // When all values are equal, add padding so the line appears centered
+  const lo = range === 0 ? Math.max(0, dataMin - Math.max(dataMin * 0.1, 1)) : dataMin;
+  const hi = range === 0 ? dataMax + Math.max(dataMax * 0.1, 1) : dataMax;
+  const effectiveRange = (hi - lo) || 1;
+
+  const xStep  = (W - pad * 2) / (data.length - 1);
+  const yScale = d => H - pad - ((d - lo) / effectiveRange) * (H - pad * 2);
 
   // Gradient fill
   const grad = ctx.createLinearGradient(0, 0, 0, H);
@@ -291,7 +326,8 @@ function drawSparkline(ctx, canvas, data, color, unit) {
   ctx.fillStyle = '#e6edf3';
   ctx.font      = `${12 * dpr}px Inter, sans-serif`;
   ctx.textAlign = 'right';
-  ctx.fillText(`${vals[vals.length - 1].toFixed(1)}${unit}`, W - pad, pad + 12 * dpr);
+  const last = vals[vals.length - 1];
+  ctx.fillText(`${last % 1 === 0 ? last.toFixed(0) : last.toFixed(1)}${unit}`, W - pad, pad + 12 * dpr);
 }
 
 /* ─── FILES ─────────────────────────────────────────────────────────────── */
