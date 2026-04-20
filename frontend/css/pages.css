@@ -417,12 +417,19 @@
 /* ─── Settings panel ────────────────────────────────────────────────────── */
 .settings-panel { padding: 20px 24px 28px; overflow-y: auto; width: 100%; }
 
-.settings-row {
+/* Two explicit columns — cards stack directly below each other */
+.settings-cols {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 16px;
+  align-items: start;   /* columns don't stretch to equal height */
   margin-bottom: 16px;
-  align-items: start;
+}
+
+.settings-col {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
 }
 
 .settings-section {

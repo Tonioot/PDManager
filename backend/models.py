@@ -20,7 +20,8 @@ class Application(Base):
     pid = Column(Integer, nullable=True)
     working_dir = Column(String(500), nullable=True)
     env_vars = Column(Text, nullable=True)
-    nginx_enabled = Column(Boolean, default=False)
-    auto_start    = Column(Boolean, default=False)
+    nginx_enabled  = Column(Boolean, default=False)
+    auto_start     = Column(Boolean, default=False)
+    restart_policy = Column(String(20), default="no")   # no | always | on-failure
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

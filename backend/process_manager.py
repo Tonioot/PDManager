@@ -1,13 +1,16 @@
 import asyncio
+import json
 import os
 import signal
 import subprocess
 import threading
+import time
 import psutil
 from collections import deque
 from typing import Optional
 
 APPS_BASE_DIR = os.path.expanduser("~/.pdmanager/apps")
+REGISTRY_PATH = os.path.expanduser("~/.pdmanager/pid_registry.json")
 os.makedirs(APPS_BASE_DIR, exist_ok=True)
 
 # Recent lines for history (capped, no tracking issues)
@@ -22,14 +25,34 @@ _main_loop: Optional[asyncio.AbstractEventLoop] = None
 
 running_processes: dict[int, subprocess.Popen] = {}
 
+# Persistent PID registry: {app_id: {pid, shell_pid, create_time}}
+# Survives PDManager restarts so we can recover orphaned processes
+_pid_registry: dict[int, dict] = {}
+
 
 def set_main_loop(loop: asyncio.AbstractEventLoop) -> None:
     global _main_loop
     _main_loop = loop
 
 
+def load_registry() -> None:
+    global _pid_registry
+    try:
+        with open(REGISTRY_PATH) as f:
+            _pid_registry = {int(k): v for k, v in json.load(f).items()}
+    except Exception:
+        _pid_registry = {}
+
+
+def _save_registry() -> None:
+    try:
+        with open(REGISTRY_PATH, "w") as f:
+            json.dump(_pid_registry, f)
+    except Exception:
+        pass
+
+
 def subscribe_logs(app_id: int) -> asyncio.Queue:
-    """Create and register a queue that receives new log lines for app_id."""
     q: asyncio.Queue = asyncio.Queue()
     with _queues_lock:
         _log_queues.setdefault(app_id, []).append(q)
@@ -46,7 +69,6 @@ def unsubscribe_logs(app_id: int, q: asyncio.Queue) -> None:
 
 
 def _push_line(app_id: int, line: str) -> None:
-    """Thread-safe: push a new log line to all subscribers."""
     if _main_loop is None or _main_loop.is_closed():
         return
     with _queues_lock:
@@ -61,8 +83,8 @@ def get_app_dir(app_name: str) -> str:
 
 def detect_app_type(app_dir: str) -> tuple[str, str, Optional[int]]:
     if os.path.exists(os.path.join(app_dir, "package.json")):
-        import json
-        pkg = json.load(open(os.path.join(app_dir, "package.json")))
+        import json as _json
+        pkg = _json.load(open(os.path.join(app_dir, "package.json")))
         scripts = pkg.get("scripts", {})
         if "start" in scripts:
             cmd = "npm start"
@@ -101,18 +123,55 @@ def detect_app_type(app_dir: str) -> tuple[str, str, Optional[int]]:
     return "unknown", "", None
 
 
-def is_process_running(pid: int) -> bool:
+def _pid_alive(pid: int, expected_create_time: Optional[float] = None) -> bool:
+    """Check if a PID is alive, optionally verifying it's the same process."""
     try:
         proc = psutil.Process(pid)
-        return proc.is_running() and proc.status() != psutil.STATUS_ZOMBIE
+        if not (proc.is_running() and proc.status() != psutil.STATUS_ZOMBIE):
+            return False
+        if expected_create_time is not None:
+            if abs(proc.create_time() - expected_create_time) > 2.0:
+                return False  # PID was reused by a different process
+        return True
     except (psutil.NoSuchProcess, psutil.AccessDenied):
         return False
+
+
+def is_process_running(pid: int, app_id: Optional[int] = None) -> bool:
+    reg = _pid_registry.get(app_id) if app_id is not None else None
+    create_time = reg.get("create_time") if reg else None
+
+    if _pid_alive(pid, create_time):
+        return True
+
+    # Fallback: if we know the shell PID, check if its children are alive
+    if reg:
+        shell_pid = reg.get("shell_pid")
+        if shell_pid and shell_pid != pid:
+            try:
+                children = psutil.Process(shell_pid).children(recursive=True)
+                if any(c.is_running() for c in children):
+                    return True
+            except Exception:
+                pass
+
+    return False
+
+
+def find_process_by_port(port: int) -> Optional[int]:
+    """Find PID of process listening on a given port (port-based recovery)."""
+    try:
+        for conn in psutil.net_connections(kind='inet'):
+            if conn.laddr.port == port and conn.status == psutil.CONN_LISTEN:
+                return conn.pid
+    except Exception:
+        pass
+    return None
 
 
 def get_process_stats(pid: int) -> dict:
     try:
         proc = psutil.Process(pid)
-        import time
         with proc.oneshot():
             cpu = proc.cpu_percent(interval=0.1)
             mem = proc.memory_info()
@@ -146,8 +205,34 @@ def start_app(app_id: int, app_name: str, command: str, working_dir: str, env_va
         stderr=subprocess.STDOUT,
         text=True,
         bufsize=1,
+        # New session so we can kill the whole process group cleanly
+        start_new_session=True,
     )
     running_processes[app_id] = proc
+    shell_pid = proc.pid
+
+    # Find the actual app PID (child of shell) after a brief moment
+    actual_pid = shell_pid
+    try:
+        time.sleep(0.25)
+        children = psutil.Process(shell_pid).children(recursive=True)
+        if children:
+            actual_pid = children[-1].pid
+    except Exception:
+        pass
+
+    # Persist to registry for recovery after PDManager restarts
+    try:
+        create_time = psutil.Process(actual_pid).create_time()
+        _pid_registry[app_id] = {
+            "pid": actual_pid,
+            "shell_pid": shell_pid,
+            "create_time": create_time,
+        }
+        _save_registry()
+    except Exception:
+        _pid_registry[app_id] = {"pid": actual_pid, "shell_pid": shell_pid}
+        _save_registry()
 
     def _reader():
         try:
@@ -163,11 +248,26 @@ def start_app(app_id: int, app_name: str, command: str, working_dir: str, env_va
             log_file.close()
 
     threading.Thread(target=_reader, daemon=True).start()
-    return proc.pid
+    return actual_pid
 
 
 def stop_app(app_id: int, pid: int) -> bool:
     proc = running_processes.pop(app_id, None)
+    reg  = _pid_registry.pop(app_id, {})
+    _save_registry()
+
+    killed = False
+
+    # Kill entire process group (shell + all children)
+    shell_pid = reg.get("shell_pid") or (proc.pid if proc else None)
+    if shell_pid:
+        try:
+            os.killpg(os.getpgid(shell_pid), signal.SIGTERM)
+            killed = True
+        except Exception:
+            pass
+
+    # Also terminate via Popen object
     if proc:
         try:
             proc.terminate()
@@ -175,17 +275,26 @@ def stop_app(app_id: int, pid: int) -> bool:
                 proc.wait(timeout=5)
             except subprocess.TimeoutExpired:
                 proc.kill()
-            return True
+            killed = True
         except Exception:
             pass
 
-    if pid and is_process_running(pid):
-        try:
-            os.kill(pid, signal.SIGTERM)
-            return True
-        except OSError:
-            pass
-    return False
+    # Kill by actual PID and its children
+    for target_pid in {pid, reg.get("pid")} - {None}:
+        if target_pid and _pid_alive(target_pid):
+            try:
+                parent = psutil.Process(target_pid)
+                for child in parent.children(recursive=True):
+                    try:
+                        child.terminate()
+                    except Exception:
+                        pass
+                parent.terminate()
+                killed = True
+            except Exception:
+                pass
+
+    return killed
 
 
 def get_recent_logs(app_id: int, app_name: str, lines: int = 300) -> list[str]:

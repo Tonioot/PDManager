@@ -166,6 +166,46 @@
 
 .input-mono { font-family: 'JetBrains Mono', 'Fira Code', monospace; font-size: 13px; }
 
+/* Cert path input with scan button */
+.input-scan-wrap { display: flex; gap: 6px; align-items: center; }
+.input-scan-wrap .input { flex: 1; min-width: 0; }
+
+/* Cert upload row (filename display + action buttons) */
+.cert-upload-row { display: flex; gap: 6px; align-items: center; }
+.cert-filename {
+  flex: 1;
+  min-width: 0;
+  padding: 6px 10px;
+  font-size: 12px;
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+  color: var(--text-muted);
+  background: var(--bg-muted);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.cert-filename.has-value { color: var(--text-primary); }
+.btn-scan {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 10px;
+  font-size: 11px;
+  font-weight: 500;
+  background: var(--bg-muted);
+  color: var(--text-secondary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all var(--transition);
+}
+.btn-scan:hover:not(:disabled) { color: var(--text-primary); background: #2d333b; }
+.btn-scan:disabled { opacity: 0.45; cursor: not-allowed; }
+
 .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 .grid-3-1 { display: grid; grid-template-columns: 2fr 1fr; gap: 12px; }
 
@@ -248,9 +288,13 @@
   box-shadow: var(--shadow-lg);
 }
 
-.dialog-title { font-size: 16px; font-weight: 700; margin-bottom: 8px; }
+.dialog-title { font-size: 16px; font-weight: 700; margin-bottom: 8px; display:flex; align-items:center; }
 .dialog-body  { color: var(--text-secondary); font-size: 13px; margin-bottom: 24px; }
 .dialog-actions { display: flex; justify-content: flex-end; gap: 10px; }
+
+.nginx-dialog { max-width: 700px; width: 95%; max-height: 90vh; display: flex; flex-direction: column; }
+.nginx-dialog .dialog-body { flex: 1; min-height: 0; margin-bottom: 0; overflow: hidden; display: flex; flex-direction: column; }
+.nginx-textarea { flex: 1; min-height: 320px; resize: vertical; font-size: 12px; line-height: 1.6; padding: 12px; border-radius: 0; border-left: none; border-right: none; }
 
 /* ─── Empty state ───────────────────────────────────────────────────────── */
 .empty-state {

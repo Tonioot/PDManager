@@ -26,7 +26,8 @@ async def init_db():
         await conn.run_sync(Base.metadata.create_all)
         # Migrate existing DBs: add columns introduced after initial schema
         for col, definition in [
-            ("auto_start", "BOOLEAN NOT NULL DEFAULT 0"),
+            ("auto_start",     "BOOLEAN NOT NULL DEFAULT 0"),
+            ("restart_policy", "VARCHAR(20) NOT NULL DEFAULT 'no'"),
         ]:
             try:
                 await conn.exec_driver_sql(

@@ -74,6 +74,10 @@
     </div>
 
     <div class="sidebar-footer">
+      <button class="sidebar-footer-btn" id="btn-pdm-nginx">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+        PDManager Domain &amp; SSL
+      </button>
       <button class="sidebar-footer-btn" id="btn-install-service">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="2" y="2" width="20" height="8" rx="2"/><rect x="2" y="14" width="20" height="8" rx="2"/><line x1="6" y1="6" x2="6.01" y2="6"/><line x1="6" y1="18" x2="6.01" y2="18"/></svg>
         Install System Service
@@ -158,6 +162,55 @@
 </div>
 
 <div id="toast-container"></div>
+
+<!-- PDManager nginx modal -->
+<div id="pdm-nginx-modal" style="display:none" class="dialog-backdrop">
+  <div class="dialog" style="max-width:500px;width:90%">
+    <div class="dialog-title">PDManager — Domain &amp; SSL</div>
+    <div class="dialog-body" style="display:flex;flex-direction:column;gap:14px">
+      <p style="margin:0;font-size:13px;color:var(--text-secondary)">
+        Set up nginx to serve PDManager under your own domain with optional SSL.
+        PDManager itself runs on port 7823; nginx will proxy it.
+      </p>
+      <div class="field" style="margin:0">
+        <label class="field-label">Domain <span class="req">*</span></label>
+        <input class="input" id="pdm-domain" placeholder="panel.example.com" />
+      </div>
+      <div class="field" style="margin:0">
+        <label class="field-label">SSL Certificate <span class="hint">(optional)</span></label>
+        <div class="cert-upload-row">
+          <span class="cert-filename" id="pdm-cert-name">No file selected</span>
+          <button type="button" class="btn-scan" id="pdm-upload-cert">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+            Upload .pem / .crt
+          </button>
+          <input type="file" id="pdm-cert-file" accept=".pem,.crt,.cer" style="display:none">
+          <input type="hidden" id="pdm-cert">
+        </div>
+      </div>
+      <div class="field" style="margin:0">
+        <label class="field-label">SSL Key <span class="hint">(optional)</span></label>
+        <div class="cert-upload-row">
+          <span class="cert-filename" id="pdm-key-name">No file selected</span>
+          <button type="button" class="btn-scan" id="pdm-upload-key">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+            Upload .pem / .key
+          </button>
+          <input type="file" id="pdm-key-file" accept=".pem,.key" style="display:none">
+          <input type="hidden" id="pdm-key">
+        </div>
+      </div>
+      <div id="pdm-nginx-msg" style="display:none;font-size:12px;padding:8px 10px;border-radius:6px"></div>
+    </div>
+    <div class="dialog-actions">
+      <button class="btn btn-secondary" id="pdm-nginx-close">Cancel</button>
+      <button class="btn btn-primary" id="pdm-nginx-apply">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+        Generate &amp; Apply
+      </button>
+    </div>
+  </div>
+</div>
 
 <script type="module">
   import { initDashboard } from './js/dashboard.js';

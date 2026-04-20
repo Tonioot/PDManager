@@ -386,7 +386,39 @@ async function openFile(entry, el) {
   }
 }
 
-/* ─── SETTINGS ──────────────────────────────────────────────────────────── */
+/* ─── SETTINGS ──────────────────────────────────────────────────────────── */function showCertPicker(inputEl, items, label, displayEl) {
+  document.querySelectorAll('.cert-picker').forEach(p => p.remove());
+  if (!items.length) { toast(`No ${label} found in app folder`, 'warn'); return; }
+
+  const picker = document.createElement('div');
+  picker.className = 'cert-picker';
+  picker.style.cssText = 'position:absolute;z-index:9999;background:#161b22;border:1px solid #30363d;border-radius:6px;max-height:200px;overflow-y:auto;box-shadow:0 8px 24px rgba(0,0,0,.5);font-size:12px;';
+
+  items.forEach(path => {
+    const row = document.createElement('div');
+    row.textContent = path;
+    row.style.cssText = 'padding:8px 12px;cursor:pointer;color:#e6edf3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;';
+    row.addEventListener('mouseenter', () => row.style.background = '#21262d');
+    row.addEventListener('mouseleave', () => row.style.background = '');
+    row.addEventListener('click', () => {
+      inputEl.value = path;
+      if (displayEl) { displayEl.textContent = path.split('/').pop(); displayEl.classList.add('has-value'); }
+      picker.remove();
+    });
+    picker.appendChild(row);
+  });
+
+  // Anchor to the visible row container (cert-upload-row), not the hidden input
+  const anchorEl = displayEl ? displayEl.closest('.cert-upload-row') || displayEl : inputEl;
+  const rect = anchorEl.getBoundingClientRect();
+  picker.style.top   = `${rect.bottom + window.scrollY + 4}px`;
+  picker.style.left  = `${rect.left + window.scrollX}px`;
+  picker.style.width = `${Math.max(rect.width, 280)}px`;
+  document.body.appendChild(picker);
+
+  const close = e => { if (!picker.contains(e.target)) { picker.remove(); document.removeEventListener('click', close, true); } };
+  setTimeout(() => document.addEventListener('click', close, true), 0);
+}
 function initSettings() {
   // Info rows
   document.getElementById('si-name').textContent  = app.name;
@@ -398,9 +430,18 @@ function initSettings() {
   document.getElementById('cfg-cmd').value          = app.start_command  || '';
   document.getElementById('cfg-port').value         = app.port           || '';
   document.getElementById('cfg-domain').value       = app.domain         || '';
-  document.getElementById('cfg-cert').value         = app.ssl_cert_path  || '';
-  document.getElementById('cfg-key').value          = app.ssl_key_path   || '';
   document.getElementById('cfg-autostart').checked  = !!app.auto_start;
+  document.getElementById('cfg-restart-policy').value = app.restart_policy || 'no';
+
+  // Cert/key hidden inputs + filename display
+  function setCertDisplay(inputId, nameId, path) {
+    document.getElementById(inputId).value = path || '';
+    const nameEl = document.getElementById(nameId);
+    if (path) { nameEl.textContent = path.split('/').pop(); nameEl.classList.add('has-value'); }
+    else      { nameEl.textContent = 'No file selected'; nameEl.classList.remove('has-value'); }
+  }
+  setCertDisplay('cfg-cert', 'cfg-cert-name', app.ssl_cert_path || '');
+  setCertDisplay('cfg-key',  'cfg-key-name',  app.ssl_key_path  || '');
 
   // Env vars
   const envContainer = document.getElementById('cfg-env-rows');
@@ -415,6 +456,49 @@ function initSettings() {
   // Action tiles
   document.getElementById('tile-pull').addEventListener('click',    () => tileAction('pull', 'Pull'));
   document.getElementById('tile-install').addEventListener('click', () => tileAction('install-deps', 'Install'));
+  document.getElementById('tile-nginx').addEventListener('click',   openNginxModal);
+
+  // Cert scan buttons (search within app folder only)
+  document.getElementById('cfg-scan-cert').addEventListener('click', async () => {
+    const btn = document.getElementById('cfg-scan-cert');
+    btn.disabled = true; btn.textContent = 'Scanning…';
+    try {
+      const { certs } = await api.discoverAppCerts(APP_ID);
+      showCertPicker(document.getElementById('cfg-cert'), certs, 'certificates', document.getElementById('cfg-cert-name'));
+    } catch { toast('Scan failed', 'error'); }
+    finally { btn.disabled = false; btn.innerHTML = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg> Scan'; }
+  });
+  document.getElementById('cfg-scan-key').addEventListener('click', async () => {
+    const btn = document.getElementById('cfg-scan-key');
+    btn.disabled = true; btn.textContent = 'Scanning…';
+    try {
+      const { keys } = await api.discoverAppCerts(APP_ID);
+      showCertPicker(document.getElementById('cfg-key'), keys, 'private keys', document.getElementById('cfg-key-name'));
+    } catch { toast('Scan failed', 'error'); }
+    finally { btn.disabled = false; btn.innerHTML = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg> Scan'; }
+  });
+
+  // Cert upload buttons
+  document.getElementById('cfg-upload-cert').addEventListener('click', () => document.getElementById('cfg-cert-file').click());
+  document.getElementById('cfg-cert-file').addEventListener('change', async e => {
+    const file = e.target.files[0]; if (!file) return;
+    document.getElementById('cfg-upload-cert').disabled = true;
+    try {
+      const res = await api.uploadAppCert(APP_ID, file);
+      setCertDisplay('cfg-cert', 'cfg-cert-name', res.path);
+    } catch (err) { toast(err.message, 'error'); }
+    finally { document.getElementById('cfg-upload-cert').disabled = false; e.target.value = ''; }
+  });
+  document.getElementById('cfg-upload-key').addEventListener('click', () => document.getElementById('cfg-key-file').click());
+  document.getElementById('cfg-key-file').addEventListener('change', async e => {
+    const file = e.target.files[0]; if (!file) return;
+    document.getElementById('cfg-upload-key').disabled = true;
+    try {
+      const res = await api.uploadAppCert(APP_ID, file);
+      setCertDisplay('cfg-key', 'cfg-key-name', res.path);
+    } catch (err) { toast(err.message, 'error'); }
+    finally { document.getElementById('cfg-upload-key').disabled = false; e.target.value = ''; }
+  });
 
   // Delete
   document.getElementById('btn-delete').addEventListener('click', async () => {
@@ -465,6 +549,7 @@ async function saveSettings() {
     ssl_cert_path:  document.getElementById('cfg-cert').value.trim()   || null,
     ssl_key_path:   document.getElementById('cfg-key').value.trim()    || null,
     auto_start:     document.getElementById('cfg-autostart').checked,
+    restart_policy: document.getElementById('cfg-restart-policy').value,
     env_vars,
     ...(token ? { github_token: token } : {}),
   };
@@ -478,6 +563,47 @@ async function saveSettings() {
     btn.disabled = false;
     btn.innerHTML = `${icon.save} Save Settings`;
   }
+}
+
+async function openNginxModal() {
+  const modal    = document.getElementById('nginx-modal');
+  const textarea = document.getElementById('nginx-config-textarea');
+  const pathEl   = document.getElementById('nginx-config-path');
+  const badge    = document.getElementById('nginx-status-badge');
+  const msgEl    = document.getElementById('nginx-save-msg');
+  msgEl.style.display = 'none';
+  textarea.value = 'Loading…';
+  modal.style.display = 'flex';
+
+  try {
+    const data = await api.getNginxConfig(APP_ID);
+    pathEl.textContent = data.path;
+    badge.textContent  = data.active ? '● Active' : data.exists ? '○ Inactive' : '○ Not created';
+    badge.style.color  = data.active ? 'var(--green)' : 'var(--text-muted)';
+    textarea.value = data.content || '# No config yet — fill in domain/port in Settings and save to generate one';
+  } catch (e) {
+    textarea.value = `Error: ${e.message}`;
+  }
+
+  const saveBtn = document.getElementById('nginx-save');
+  saveBtn.onclick = async () => {
+    saveBtn.disabled = true;
+    msgEl.style.display = 'none';
+    try {
+      const res = await api.saveNginxConfig(APP_ID, textarea.value);
+      msgEl.textContent = res.ok ? 'Saved & nginx reloaded successfully.' : `Error: ${res.message}`;
+      msgEl.style.display = 'block';
+      msgEl.style.color = res.ok ? 'var(--green)' : 'var(--red)';
+      if (res.ok) { badge.textContent = '● Active'; badge.style.color = 'var(--green)'; }
+    } catch (e) {
+      msgEl.textContent = e.message; msgEl.style.display = 'block'; msgEl.style.color = 'var(--red)';
+    } finally {
+      saveBtn.disabled = false;
+    }
+  };
+
+  document.getElementById('nginx-close').onclick = () => { modal.style.display = 'none'; };
+  modal.addEventListener('click', e => { if (e.target === modal) modal.style.display = 'none'; });
 }
 
 async function tileAction(endpoint, label) {

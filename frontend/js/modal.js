@@ -1,6 +1,60 @@
 import { api } from './api.js';
 import { icon, spinner, toast } from './utils.js';
 
+// ── Cert picker helper ────────────────────────────────────────────────────────
+let _certCache = null;
+
+async function loadCerts() {
+  if (_certCache) return _certCache;
+  try {
+    _certCache = await api.discoverCerts();
+  } catch {
+    _certCache = { certs: [], keys: [] };
+  }
+  return _certCache;
+}
+
+function showPicker(inputEl, items, label) {
+  // Remove any existing picker
+  document.querySelectorAll('.cert-picker').forEach(p => p.remove());
+
+  if (!items.length) {
+    toast(`No ${label} found on this machine`, 'warn');
+    return;
+  }
+
+  const picker = document.createElement('div');
+  picker.className = 'cert-picker';
+  picker.style.cssText = `
+    position:absolute; z-index:9999; background:#161b22; border:1px solid #30363d;
+    border-radius:6px; max-height:200px; overflow-y:auto; min-width:320px;
+    box-shadow:0 8px 24px rgba(0,0,0,.5); font-size:12px;`;
+
+  items.forEach(path => {
+    const row = document.createElement('div');
+    row.className = 'cert-picker-row';
+    row.textContent = path;
+    row.style.cssText = 'padding:8px 12px; cursor:pointer; color:#e6edf3; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;';
+    row.addEventListener('mouseenter', () => row.style.background = '#21262d');
+    row.addEventListener('mouseleave', () => row.style.background = '');
+    row.addEventListener('click', () => {
+      inputEl.value = path;
+      picker.remove();
+      inputEl.dispatchEvent(new Event('input'));
+    });
+    picker.appendChild(row);
+  });
+
+  const rect = inputEl.getBoundingClientRect();
+  picker.style.top  = `${rect.bottom + window.scrollY + 4}px`;
+  picker.style.left = `${rect.left  + window.scrollX}px`;
+  picker.style.width = `${rect.width}px`;
+  document.body.appendChild(picker);
+
+  const close = e => { if (!picker.contains(e.target) && e.target !== inputEl) { picker.remove(); document.removeEventListener('click', close, true); } };
+  setTimeout(() => document.addEventListener('click', close, true), 0);
+}
+
 export function openDeployModal(onSuccess) {
   const backdrop = document.createElement('div');
   backdrop.className = 'modal-backdrop';
@@ -63,30 +117,6 @@ function modalHTML() {
               <div class="input-icon-wrap">
                 <span class="icon">${icon.lock}</span>
                 <input class="input input-mono" id="f-token" type="password" placeholder="ghp_..." />
-              </div>
-            </div>
-          </div>
-
-          <!-- Domain & SSL -->
-          <div class="modal-section">
-            <div class="section-title">${icon.globe} Domain &amp; SSL</div>
-
-            <div class="field">
-              <label class="field-label">Domain Name <span class="hint">(optional)</span></label>
-              <div class="input-icon-wrap">
-                <span class="icon">${icon.globe}</span>
-                <input class="input" id="f-domain" placeholder="myapp.example.com" />
-              </div>
-            </div>
-
-            <div class="grid-2">
-              <div class="field">
-                <label class="field-label">SSL Certificate Path</label>
-                <input class="input" id="f-cert" placeholder="/etc/ssl/certs/cert.pem" />
-              </div>
-              <div class="field">
-                <label class="field-label">SSL Key Path</label>
-                <input class="input" id="f-key" placeholder="/etc/ssl/private/key.pem" />
               </div>
             </div>
           </div>
@@ -154,9 +184,6 @@ async function handleDeploy(modal, form, onSuccess, close) {
     name:         modal.querySelector('#f-name').value.trim(),
     repo_url:     modal.querySelector('#f-repo').value.trim(),
     github_token: modal.querySelector('#f-token').value.trim() || null,
-    domain:       modal.querySelector('#f-domain').value.trim() || null,
-    ssl_cert_path:modal.querySelector('#f-cert').value.trim() || null,
-    ssl_key_path: modal.querySelector('#f-key').value.trim() || null,
     start_command:modal.querySelector('#f-cmd').value.trim() || null,
     port:         parseInt(modal.querySelector('#f-port').value) || null,
     env_vars,

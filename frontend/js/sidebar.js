@@ -10,10 +10,24 @@ const STATUS_DOT = {
   stopping: 'var(--yellow)',
 };
 
+// ── Helper: set a cert filename display + hidden input ───────────────────────
+function setCertDisplay(modal, nameId, hiddenId, path) {
+  modal.querySelector(hiddenId).value = path || '';
+  const nameEl = modal.querySelector(nameId);
+  if (path) {
+    nameEl.textContent = path.split('/').pop();
+    nameEl.classList.add('has-value');
+  } else {
+    nameEl.textContent = 'No file selected';
+    nameEl.classList.remove('has-value');
+  }
+}
+
 export function initSidebar() {
   loadSidebarApps();
   setInterval(loadSidebarApps, 8000);
   wireServiceButton();
+  wirePDManagerNginxButton();
 }
 
 async function loadSidebarApps() {
@@ -39,6 +53,92 @@ async function loadSidebarApps() {
         </a>`;
     }).join('');
   } catch {}
+}
+
+function wirePDManagerNginxButton() {
+  const btn   = document.getElementById('btn-pdm-nginx');
+  const modal = document.getElementById('pdm-nginx-modal');
+  if (!btn || !modal) return;
+
+  btn.addEventListener('click', async () => {
+    modal.style.display = 'flex';
+    const msg = modal.querySelector('#pdm-nginx-msg');
+    msg.style.display = 'none';
+
+    // Pre-fill existing config domain if present
+    try {
+      const data = await api.getPDManagerNginx();
+      if (data.exists && data.content) {
+        const m = data.content.match(/server_name\s+([^\s;]+)/);
+        if (m) modal.querySelector('#pdm-domain').value = m[1];
+        const c = data.content.match(/ssl_certificate\s+([^\s;]+)/);
+        if (c) setCertDisplay(modal, '#pdm-cert-name', '#pdm-cert', c[1]);
+        const k = data.content.match(/ssl_certificate_key\s+([^\s;]+)/);
+        if (k) setCertDisplay(modal, '#pdm-key-name', '#pdm-key', k[1]);
+      }
+    } catch {}
+  });
+
+  modal.querySelector('#pdm-nginx-close').onclick = () => { modal.style.display = 'none'; };
+  modal.addEventListener('click', e => { if (e.target === modal) modal.style.display = 'none'; });
+
+  // Upload buttons
+  modal.querySelector('#pdm-upload-cert').addEventListener('click', () => modal.querySelector('#pdm-cert-file').click());
+  modal.querySelector('#pdm-cert-file').addEventListener('change', async e => {
+    const file = e.target.files[0];
+    if (!file) return;
+    modal.querySelector('#pdm-upload-cert').disabled = true;
+    try {
+      const res = await api.uploadSystemCert(file);
+      setCertDisplay(modal, '#pdm-cert-name', '#pdm-cert', res.path);
+    } catch (err) { toast(err.message, 'error'); }
+    finally { modal.querySelector('#pdm-upload-cert').disabled = false; e.target.value = ''; }
+  });
+
+  modal.querySelector('#pdm-upload-key').addEventListener('click', () => modal.querySelector('#pdm-key-file').click());
+  modal.querySelector('#pdm-key-file').addEventListener('change', async e => {
+    const file = e.target.files[0];
+    if (!file) return;
+    modal.querySelector('#pdm-upload-key').disabled = true;
+    try {
+      const res = await api.uploadSystemCert(file);
+      setCertDisplay(modal, '#pdm-key-name', '#pdm-key', res.path);
+    } catch (err) { toast(err.message, 'error'); }
+    finally { modal.querySelector('#pdm-upload-key').disabled = false; e.target.value = ''; }
+  });
+
+  modal.querySelector('#pdm-nginx-apply').addEventListener('click', async () => {
+    const domain = modal.querySelector('#pdm-domain').value.trim();
+    const cert   = modal.querySelector('#pdm-cert').value.trim() || null;
+    const key    = modal.querySelector('#pdm-key').value.trim()  || null;
+    const msg    = modal.querySelector('#pdm-nginx-msg');
+
+    if (!domain) { showMsg(msg, 'Domain is required', false); return; }
+
+    const applyBtn = modal.querySelector('#pdm-nginx-apply');
+    applyBtn.disabled = true;
+
+    try {
+      const res = await api.applyPDManagerNginx({ domain, ssl_cert_path: cert, ssl_key_path: key });
+      if (res.ok) {
+        showMsg(msg, `Nginx configured — PDManager reachable at ${cert ? 'https' : 'http'}://${domain}`, true);
+      } else {
+        showMsg(msg, res.message, false);
+      }
+    } catch (e) {
+      showMsg(msg, e.message, false);
+    } finally {
+      applyBtn.disabled = false;
+    }
+  });
+}
+
+function showMsg(el, text, success) {
+  el.textContent = text;
+  el.style.display = 'block';
+  el.style.background = success ? 'var(--green-bg)'  : 'var(--red-bg)';
+  el.style.color      = success ? 'var(--green)'     : 'var(--red)';
+  el.style.border     = `1px solid ${success ? 'var(--green-border)' : 'var(--red-border)'}`;
 }
 
 function wireServiceButton() {

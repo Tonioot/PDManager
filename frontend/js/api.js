@@ -28,6 +28,22 @@ export const api = {
   listFiles:(id, path) => request('GET',    `/apps/${id}/files?path=${encodeURIComponent(path || '')}`),
   fileContent:(id, p)  => request('GET',    `/apps/${id}/files/content?path=${encodeURIComponent(p)}`),
   serviceFile:()       => request('GET',    '/apps/system/service-file'),
+  discoverCerts:()     => request('GET',    '/apps/system/certs'),
+  discoverAppCerts:(id)=> request('GET',    `/apps/${id}/certs`),
+  uploadSystemCert: (file) => {
+    const fd = new FormData(); fd.append('file', file);
+    return fetch(BASE + '/system/certs/upload', { method: 'POST', body: fd })
+      .then(r => r.json().then(d => { if (!r.ok) throw new Error(d.detail || `HTTP ${r.status}`); return d; }));
+  },
+  uploadAppCert: (id, file) => {
+    const fd = new FormData(); fd.append('file', file);
+    return fetch(BASE + `/apps/${id}/certs/upload`, { method: 'POST', body: fd })
+      .then(r => r.json().then(d => { if (!r.ok) throw new Error(d.detail || `HTTP ${r.status}`); return d; }));
+  },
+  getNginxConfig: (id) => request('GET',    `/apps/${id}/nginx-config`),
+  saveNginxConfig:(id, content) => request('PUT', `/apps/${id}/nginx-config`, { content }),
+  getPDManagerNginx: () => request('GET',  '/system/nginx-config'),
+  applyPDManagerNginx:(data)    => request('POST', '/system/nginx-config', data),
 };
 
 export function wsLogs(appId, onLine) {
