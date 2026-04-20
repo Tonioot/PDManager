@@ -452,7 +452,8 @@ async def install_deps(app_id: int, db: AsyncSession = Depends(get_db)):
 @router.get("/{app_id}/nginx-config")
 async def get_nginx_config(app_id: int, db: AsyncSession = Depends(get_db)):
     app = await _get_or_404(app_id, db)
-    config_path = os.path.join(nm.NGINX_SITES_DIR, app.name)
+    safe = nm._safe_name(app.name)
+    config_path = os.path.join(nm.NGINX_SITES_DIR, safe)
     if not os.path.exists(config_path):
         generated = None
         if app.domain and app.port:
@@ -460,7 +461,7 @@ async def get_nginx_config(app_id: int, db: AsyncSession = Depends(get_db)):
         return {"exists": False, "path": config_path, "content": generated, "active": False}
     with open(config_path) as f:
         content = f.read()
-    enabled_path = os.path.join(nm.NGINX_ENABLED_DIR, app.name)
+    enabled_path = os.path.join(nm.NGINX_ENABLED_DIR, safe)
     return {"exists": True, "path": config_path, "content": content, "active": os.path.exists(enabled_path)}
 
 
