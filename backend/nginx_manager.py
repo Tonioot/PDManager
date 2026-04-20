@@ -61,22 +61,32 @@ def write_nginx_config(app_name: str, config: str) -> tuple[bool, str]:
     enabled_path = os.path.join(NGINX_ENABLED_DIR, app_name)
 
     try:
-        with open(config_path, "w") as f:
-            f.write(config)
+        # Write via sudo tee (works without direct write permission)
+        result = subprocess.run(
+            ["sudo", "tee", config_path],
+            input=config, text=True, capture_output=True,
+        )
+        if result.returncode != 0:
+            return False, result.stderr or "Failed to write nginx config"
 
+        # Symlink into sites-enabled
         if not os.path.exists(enabled_path):
-            os.symlink(config_path, enabled_path)
+            r = subprocess.run(
+                ["sudo", "ln", "-sf", config_path, enabled_path],
+                capture_output=True, text=True,
+            )
+            if r.returncode != 0:
+                return False, r.stderr or "Failed to enable nginx site"
 
-        result = subprocess.run(["nginx", "-t"], capture_output=True, text=True)
+        # Validate config
+        result = subprocess.run(["sudo", "nginx", "-t"], capture_output=True, text=True)
         if result.returncode != 0:
             return False, result.stderr
 
-        subprocess.run(["systemctl", "reload", "nginx"], capture_output=True)
+        subprocess.run(["sudo", "systemctl", "reload", "nginx"], capture_output=True)
         return True, "OK"
-    except PermissionError:
-        return False, "Permission denied — run with sudo or configure sudoers for nginx"
     except FileNotFoundError:
-        return False, "nginx not found — install nginx first"
+        return False, "nginx not found — install nginx first (sudo apt install nginx)"
     except Exception as e:
         return False, str(e)
 
@@ -87,10 +97,10 @@ def remove_nginx_config(app_name: str) -> bool:
 
     removed = False
     for path in [enabled_path, config_path]:
-        if os.path.exists(path):
-            os.remove(path)
+        r = subprocess.run(["sudo", "rm", "-f", path], capture_output=True)
+        if r.returncode == 0:
             removed = True
 
     if removed:
-        subprocess.run(["systemctl", "reload", "nginx"], capture_output=True)
+        subprocess.run(["sudo", "systemctl", "reload", "nginx"], capture_output=True)
     return removed
