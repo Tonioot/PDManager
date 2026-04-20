@@ -24,10 +24,14 @@ if [ -n "$OLD_PID" ]; then
 fi
 
 cd "$BACKEND"
-[ -f "venv/bin/activate" ] && source venv/bin/activate
 
-# ── Ensure Python dependencies are installed ──────────────────────────────
-python3 -m pip install -q -r requirements.txt
+# ── Ensure venv exists and dependencies are installed ─────────────────────
+if [ ! -f "venv/bin/activate" ]; then
+  echo -e "Creating virtual environment…"
+  python3 -m venv venv
+fi
+source venv/bin/activate
+pip install -q -r requirements.txt
 
 # ── First-run: generate a random admin password ────────────────────────────
 if [ ! -f "$CREDS" ]; then
