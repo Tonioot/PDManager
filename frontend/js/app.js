@@ -511,6 +511,7 @@ function initSettings() {
       toast(e.message, 'error');
     }
   });
+
 }
 
 function addEnvRow(container, key = '', value = '') {

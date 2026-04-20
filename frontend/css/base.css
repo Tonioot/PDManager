@@ -220,3 +220,5 @@ input, textarea, select {
 }
 
 .sidebar-footer-btn:hover { color: var(--text-primary); background: var(--bg-muted); }
+.sidebar-footer-btn--danger { color: var(--red) !important; }
+.sidebar-footer-btn--danger:hover { background: var(--red-bg) !important; color: var(--red) !important; }

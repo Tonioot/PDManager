@@ -1,19 +1,28 @@
 const BASE = '/api';
 
+function redirectToLogin() {
+  const next = encodeURIComponent(location.pathname + location.search);
+  location.href = `/login.html?next=${next}`;
+}
+
 async function request(method, path, body) {
-  const opts = { method, headers: {} };
+  const opts = { method, headers: {}, credentials: 'same-origin' };
   if (body) {
     opts.headers['Content-Type'] = 'application/json';
     opts.body = JSON.stringify(body);
   }
   const res = await fetch(BASE + path, opts);
+  if (res.status === 401) { redirectToLogin(); return; }
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(data.detail || `HTTP ${res.status}`);
   return data;
 }
 
 export const api = {
-  health:   ()         => request('GET',    '/health'),
+  health:        ()          => request('GET',    '/health'),
+  checkAuth:     ()          => request('GET',    '/auth/check'),
+  logout:        ()          => request('POST',   '/auth/logout'),
+  changePassword:(newPwd)    => request('POST',   '/auth/change-password', { password: newPwd }),
   listApps: ()         => request('GET',    '/apps'),
   getApp:   (id)       => request('GET',    `/apps/${id}`),
   deploy:   (payload)  => request('POST',   '/apps', payload),
@@ -32,13 +41,13 @@ export const api = {
   discoverAppCerts:(id)=> request('GET',    `/apps/${id}/certs`),
   uploadSystemCert: (file) => {
     const fd = new FormData(); fd.append('file', file);
-    return fetch(BASE + '/system/certs/upload', { method: 'POST', body: fd })
-      .then(r => r.json().then(d => { if (!r.ok) throw new Error(d.detail || `HTTP ${r.status}`); return d; }));
+    return fetch(BASE + '/system/certs/upload', { method: 'POST', body: fd, credentials: 'same-origin' })
+      .then(r => { if (r.status === 401) { redirectToLogin(); return; } return r.json().then(d => { if (!r.ok) throw new Error(d.detail || `HTTP ${r.status}`); return d; }); });
   },
   uploadAppCert: (id, file) => {
     const fd = new FormData(); fd.append('file', file);
-    return fetch(BASE + `/apps/${id}/certs/upload`, { method: 'POST', body: fd })
-      .then(r => r.json().then(d => { if (!r.ok) throw new Error(d.detail || `HTTP ${r.status}`); return d; }));
+    return fetch(BASE + `/apps/${id}/certs/upload`, { method: 'POST', body: fd, credentials: 'same-origin' })
+      .then(r => { if (r.status === 401) { redirectToLogin(); return; } return r.json().then(d => { if (!r.ok) throw new Error(d.detail || `HTTP ${r.status}`); return d; }); });
   },
   getNginxConfig: (id) => request('GET',    `/apps/${id}/nginx-config`),
   saveNginxConfig:(id, content) => request('PUT', `/apps/${id}/nginx-config`, { content }),

@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>PDManager — Login</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="css/variables.css" />
+  <link rel="stylesheet" href="css/base.css" />
+  <style>
+    body {
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: var(--bg-base);
+    }
+
+    .login-card {
+      width: 100%;
+      max-width: 360px;
+      background: var(--bg-surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 36px 32px 32px;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+    }
+
+    .login-logo {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 28px;
+    }
+
+    .login-logo-icon {
+      width: 40px;
+      height: 40px;
+      background: linear-gradient(135deg, var(--accent-dark), var(--accent));
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+
+    .login-logo-text .title {
+      font-size: 16px;
+      font-weight: 600;
+      color: var(--text-primary);
+    }
+
+    .login-logo-text .sub {
+      font-size: 12px;
+      color: var(--text-secondary);
+    }
+
+    .login-heading {
+      font-size: 20px;
+      font-weight: 600;
+      color: var(--text-primary);
+      margin: 0 0 4px;
+    }
+
+    .login-subtext {
+      font-size: 13px;
+      color: var(--text-secondary);
+      margin: 0 0 24px;
+    }
+
+    .form-group {
+      margin-bottom: 16px;
+    }
+
+    .form-label {
+      display: block;
+      font-size: 12px;
+      font-weight: 500;
+      color: var(--text-secondary);
+      margin-bottom: 6px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .form-input {
+      width: 100%;
+      padding: 9px 12px;
+      background: var(--bg-muted);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--text-primary);
+      font-size: 14px;
+      font-family: 'JetBrains Mono', monospace;
+      outline: none;
+      box-sizing: border-box;
+      transition: border-color 0.15s;
+    }
+
+    .form-input:focus {
+      border-color: var(--accent);
+    }
+
+    .btn-login {
+      width: 100%;
+      padding: 10px;
+      background: var(--accent-dark);
+      border: none;
+      border-radius: 6px;
+      color: #fff;
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+      margin-top: 8px;
+      transition: background 0.15s, opacity 0.15s;
+    }
+
+    .btn-login:hover {
+      background: var(--accent);
+    }
+
+    .btn-login:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    .login-error {
+      display: none;
+      margin-top: 14px;
+      padding: 10px 12px;
+      background: var(--red-bg);
+      border: 1px solid var(--red-border);
+      border-radius: 6px;
+      color: var(--red);
+      font-size: 13px;
+    }
+
+    .login-error.visible {
+      display: block;
+    }
+  </style>
+</head>
+<body>
+
+<div class="login-card">
+  <div class="login-logo">
+    <div class="login-logo-icon">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round">
+        <rect x="2" y="2" width="20" height="8" rx="2"/>
+        <rect x="2" y="14" width="20" height="8" rx="2"/>
+        <line x1="6" y1="6" x2="6.01" y2="6"/>
+        <line x1="6" y1="18" x2="6.01" y2="18"/>
+      </svg>
+    </div>
+    <div class="login-logo-text">
+      <div class="title">PDManager</div>
+      <div class="sub">Deployment Panel</div>
+    </div>
+  </div>
+
+  <h1 class="login-heading">Sign in</h1>
+  <p class="login-subtext">Enter the admin password to continue.</p>
+
+  <form id="login-form" autocomplete="off">
+    <div class="form-group">
+      <label class="form-label" for="password">Password</label>
+      <input
+        id="password"
+        class="form-input"
+        type="password"
+        autocomplete="current-password"
+        placeholder="••••••••••••••••"
+        required
+        autofocus
+      />
+    </div>
+    <button class="btn-login" type="submit" id="login-btn">Sign in</button>
+    <div class="login-error" id="login-error"></div>
+  </form>
+</div>
+
+<script>
+  const form   = document.getElementById('login-form');
+  const btn    = document.getElementById('login-btn');
+  const errEl  = document.getElementById('login-error');
+  const pwdEl  = document.getElementById('password');
+
+  function showError(msg) {
+    errEl.textContent = msg;
+    errEl.classList.add('visible');
+  }
+
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    btn.disabled = true;
+    btn.textContent = 'Signing in…';
+    errEl.classList.remove('visible');
+
+    try {
+      const res = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
+        body: JSON.stringify({ password: pwdEl.value }),
+      });
+
+      if (res.ok) {
+        const redirect = new URLSearchParams(location.search).get('next') || '/';
+        location.href = redirect;
+        return;
+      }
+
+      if (res.status === 429) {
+        showError('Too many attempts. Please wait a minute and try again.');
+      } else if (res.status === 401) {
+        showError('Incorrect password.');
+        pwdEl.value = '';
+        pwdEl.focus();
+      } else {
+        showError('An unexpected error occurred.');
+      }
+    } catch {
+      showError('Could not reach the server.');
+    }
+
+    btn.disabled = false;
+    btn.textContent = 'Sign in';
+  });
+</script>
+</body>
+</html>
