@@ -84,12 +84,13 @@ async def _deploy_app(app: Application):
 
     app.working_dir = app_dir
     app_type, default_cmd, default_port = pm.detect_app_type(app_dir)
-    app.app_type = app_type
 
     if not app.start_command:
         app.start_command = default_cmd
     if not app.port and default_port:
         app.port = default_port
+
+    app.app_type = pm.detect_app_type_from_command(app.start_command) if app.start_command else app_type
 
     await asyncio.to_thread(_run_install, app_dir)
 
@@ -307,6 +308,7 @@ async def update_app(app_id: int, req: UpdateRequest, db: AsyncSession = Depends
         app.ssl_key_path = req.ssl_key_path
     if req.start_command is not None:
         app.start_command = req.start_command
+        app.app_type = pm.detect_app_type_from_command(req.start_command)
     if req.port is not None:
         app.port = req.port
     if req.env_vars is not None:
@@ -402,16 +404,19 @@ async def git_pull(app_id: int, db: AsyncSession = Depends(get_db)):
     app = await _get_or_404(app_id, db)
     app_dir = pm.get_app_dir(app.name)
 
-    env = os.environ.copy()
     if app.github_token:
         url = _build_clone_url(app.repo_url, app.github_token)
         subprocess.run(["git", "remote", "set-url", "origin", url], cwd=app_dir, capture_output=True)
 
-    result = subprocess.run(["git", "pull"], cwd=app_dir, capture_output=True, text=True)
-    if result.returncode != 0:
-        raise HTTPException(500, f"Git pull failed: {result.stderr}")
+    fetch = subprocess.run(["git", "fetch", "origin"], cwd=app_dir, capture_output=True, text=True)
+    if fetch.returncode != 0:
+        raise HTTPException(500, f"Git fetch failed: {fetch.stderr}")
 
-    return {"message": "Pulled latest changes", "output": result.stdout}
+    reset = subprocess.run(["git", "reset", "--hard", "@{u}"], cwd=app_dir, capture_output=True, text=True)
+    if reset.returncode != 0:
+        raise HTTPException(500, f"Git reset failed: {reset.stderr}")
+
+    return {"message": "Pulled latest changes", "output": reset.stdout}
 
 
 @router.post("/{app_id}/install-deps")

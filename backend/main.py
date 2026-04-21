@@ -88,7 +88,7 @@ async def _crash_monitor():
                 for a in apps:
                     if a.status != "running" or not a.pid:
                         continue
-                    if pm.is_process_running(a.pid):
+                    if pm.is_process_running(a.pid, a.id):
                         continue
 
                     policy = a.restart_policy or "no"
@@ -138,6 +138,7 @@ async def _crash_monitor():
 async def lifespan(app: FastAPI):
     await init_db()
     pm.set_main_loop(asyncio.get_event_loop())
+    pm.load_registry()   # restore PID + shell_pid from disk before any process checks
 
     # First-run: generate a password if none exists
     if not auth.load_hashed_password():
@@ -157,7 +158,7 @@ async def lifespan(app: FastAPI):
         result = await db.execute(select(Application))
         for a in result.scalars().all():
             if a.pid:
-                if pm.is_process_running(a.pid):
+                if pm.is_process_running(a.pid, a.id):
                     a.status = "running"
                 else:
                     recovered = pm.find_process_by_port(a.port) if a.port else None

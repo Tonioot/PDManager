@@ -121,6 +121,26 @@ def get_app_dir(app_name: str) -> str:
     return os.path.join(APPS_BASE_DIR, _safe_dir_name(app_name))
 
 
+def detect_app_type_from_command(cmd: str) -> str:
+    """Infer app type from the start command."""
+    cmd = cmd.strip().lower()
+    if cmd.startswith("node ") or "npm " in cmd or cmd == "npm start" or cmd.startswith("npx "):
+        return "nodejs"
+    if cmd.startswith("python") or cmd.startswith("uvicorn") or cmd.startswith("gunicorn") or cmd.startswith("flask"):
+        return "python"
+    if cmd.startswith("ruby") or cmd.startswith("bundle exec ruby") or cmd.startswith("rails"):
+        return "ruby"
+    if cmd.startswith("go run") or cmd.startswith("go build") or cmd.startswith("./ "):
+        return "go"
+    if cmd.startswith("php") or cmd.startswith("composer"):
+        return "php"
+    if cmd.startswith("java") or cmd.startswith("mvn") or cmd.startswith("gradle"):
+        return "java"
+    if cmd.startswith("dotnet") or cmd.endswith(".exe"):
+        return "dotnet"
+    return "unknown"
+
+
 def detect_app_type(app_dir: str) -> tuple[str, str, Optional[int]]:
     if os.path.exists(os.path.join(app_dir, "package.json")):
         import json as _json
