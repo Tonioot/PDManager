@@ -13,6 +13,7 @@ let chartMem = null;
 let cpuData = [];
 let memData = [];
 let statsTabActive = false;
+let lastStatStatus = null; // 'running' | 'stopped' | null (unknown/loading)
 
 /* ─── Init ──────────────────────────────────────────────────────────────── */
 export async function initApp() {
@@ -200,12 +201,15 @@ function startBgStats() {
 
 function handleStatData(data) {
   if (data.status === 'stopped') {
+    lastStatStatus = 'stopped';
     if (statsTabActive) {
+      _removeStatsLoading();
       document.getElementById('stats-stopped').style.display = 'flex';
       document.getElementById('stats-content').style.display = 'none';
     }
     return;
   }
+  lastStatStatus = 'running';
 
   // Always accumulate — even while on a different tab
   const now = new Date().toLocaleTimeString('nl', { hour:'2-digit', minute:'2-digit', second:'2-digit' });
@@ -215,6 +219,7 @@ function handleStatData(data) {
 
   if (!statsTabActive) return;
 
+  _removeStatsLoading();
   document.getElementById('stats-stopped').style.display = 'none';
   document.getElementById('stats-content').style.display = 'block';
 
@@ -243,16 +248,28 @@ function initStats() {
 
   initCharts();
 
-  // Render whatever history is already accumulated
-  if (cpuData.length > 0) {
+  // Show the right panel immediately based on last known status
+  if (lastStatStatus === 'stopped') {
+    document.getElementById('stats-stopped').style.display = 'flex';
+    document.getElementById('stats-content').style.display = 'none';
+  } else if (cpuData.length > 0) {
     document.getElementById('stats-stopped').style.display = 'none';
     document.getElementById('stats-content').style.display = 'block';
     updateChart(chartCpu, cpuData);
     updateChart(chartMem, memData);
   } else {
+    // Status unknown (still connecting) — show a subtle loading state
     document.getElementById('stats-stopped').style.display = 'none';
     document.getElementById('stats-content').style.display = 'none';
+    document.getElementById('panel-stats').insertAdjacentHTML('afterbegin',
+      '<div id="stats-loading" style="display:flex;align-items:center;justify-content:center;height:120px;color:var(--text-muted);font-size:13px;gap:8px">'
+      + '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg>'
+      + 'Loading stats…</div>');
   }
+}
+
+function _removeStatsLoading() {
+  document.getElementById('stats-loading')?.remove();
 }
 
 function initCharts() {

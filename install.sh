@@ -115,6 +115,7 @@ WorkingDirectory=$SCRIPT_DIR
 ExecStart=/bin/bash $START_SH
 Restart=on-failure
 RestartSec=5
+KillMode=process
 
 [Install]
 WantedBy=multi-user.target

@@ -64,14 +64,24 @@ export function wsLogs(appId, onLine) {
 
 export function wsStats(appId, onData) {
   const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
-  const ws = new WebSocket(`${proto}//${location.host}/ws/apps/${appId}/stats`);
-  ws.onmessage = e => onData(JSON.parse(e.data));
-  return ws;
+  let ws, closed = false;
+  function connect() {
+    ws = new WebSocket(`${proto}//${location.host}/ws/apps/${appId}/stats`);
+    ws.onmessage = e => onData(JSON.parse(e.data));
+    ws.onclose = () => { if (!closed) setTimeout(connect, 3000); };
+  }
+  connect();
+  return { close() { closed = true; ws.close(); } };
 }
 
 export function wsSystemStats(onData) {
   const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
-  const ws = new WebSocket(`${proto}//${location.host}/ws/system/stats`);
-  ws.onmessage = e => onData(JSON.parse(e.data));
-  return ws;
+  let ws, closed = false;
+  function connect() {
+    ws = new WebSocket(`${proto}//${location.host}/ws/system/stats`);
+    ws.onmessage = e => onData(JSON.parse(e.data));
+    ws.onclose = () => { if (!closed) setTimeout(connect, 3000); };
+  }
+  connect();
+  return { close() { closed = true; ws.close(); } };
 }

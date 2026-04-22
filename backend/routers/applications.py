@@ -219,12 +219,13 @@ async def _sync_process_status(app, db) -> None:
     """Reconcile DB status with actual OS state. Uses port recovery as fallback."""
     if not app.pid:
         return
-    if pm.is_process_running(app.pid, app.id):
+    alive = await asyncio.to_thread(pm.is_process_running, app.pid, app.id)
+    if alive:
         app.status = "running"
         return
     # Stored PID is dead — try to recover via port before declaring stopped
     if app.port:
-        recovered = pm.find_process_by_port(app.port)
+        recovered = await asyncio.to_thread(pm.find_process_by_port, app.port)
         if recovered:
             app.pid = recovered
             app.status = "running"
@@ -239,11 +240,34 @@ async def _sync_process_status(app, db) -> None:
 async def list_apps(db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(Application))
     apps = result.scalars().all()
-    out = []
-    for app in apps:
-        await _sync_process_status(app, db)
-        out.append(_app_to_dict(app))
-    return out
+
+    # Check all process statuses in parallel (each check runs blocking psutil calls in threads)
+    async def _check(app):
+        if not app.pid:
+            return app.id, app.status, app.pid
+        alive = await asyncio.to_thread(pm.is_process_running, app.pid, app.id)
+        if alive:
+            return app.id, "running", app.pid
+        if app.port:
+            recovered = await asyncio.to_thread(pm.find_process_by_port, app.port)
+            if recovered:
+                return app.id, "running", recovered
+        return app.id, "stopped", None
+
+    checks = await asyncio.gather(*[_check(a) for a in apps])
+
+    id_map = {a.id: a for a in apps}
+    dirty = False
+    for app_id, new_status, new_pid in checks:
+        a = id_map[app_id]
+        if a.status != new_status or a.pid != new_pid:
+            a.status = new_status
+            a.pid = new_pid
+            dirty = True
+    if dirty:
+        await db.commit()
+
+    return [_app_to_dict(a) for a in apps]
 
 
 @router.post("")

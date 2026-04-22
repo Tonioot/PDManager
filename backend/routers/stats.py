@@ -34,11 +34,15 @@ async def stream_stats(app_id: int, websocket: WebSocket):
 async def stream_system_stats(websocket: WebSocket):
     await websocket.accept()
     try:
+        # Prime the cpu_percent measurement so the first value is meaningful
+        psutil.cpu_percent(interval=None)
         while True:
             mem = psutil.virtual_memory()
             disk = psutil.disk_usage("/")
+            # Run blocking cpu_percent in a thread to avoid blocking the event loop
+            cpu = await asyncio.to_thread(psutil.cpu_percent, 1)
             await websocket.send_json({
-                "cpu_percent": psutil.cpu_percent(interval=1),
+                "cpu_percent": cpu,
                 "memory_total_mb": round(mem.total / 1024 / 1024),
                 "memory_used_mb": round(mem.used / 1024 / 1024),
                 "memory_percent": mem.percent,
