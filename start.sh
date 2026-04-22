@@ -26,27 +26,22 @@ fi
 cd "$BACKEND"
 
 # ── Ensure venv exists and dependencies are installed ─────────────────────
-if [ ! -d "venv" ]; then
+if [ ! -f "venv/bin/activate" ]; then
   echo -e "Creating virtual environment…"
   python3 -m venv venv
 fi
-
-echo -e "Checking/Installing dependencies…"
-# We gebruiken het directe pad naar de venv-pip om PEP 668 te omzeilen
-./venv/bin/pip install -q -r requirements.txt --break-system-packages
+source venv/bin/activate
+pip install -q -r requirements.txt --break-system-packages
 
 # ── First-run: generate a random admin password ────────────────────────────
 if [ ! -f "$CREDS" ]; then
-  # Gebruik de python uit de venv voor de generator
-  PASS=$(./venv/bin/python3 -c "import secrets, string; print(''.join(secrets.choice(string.ascii_letters + string.digits + '!@#%^&*') for _ in range(20)))")
-  
-  ./venv/bin/python3 - <<PYEOF
+  PASS=$(python3 -c "import secrets, string; print(''.join(secrets.choice(string.ascii_letters + string.digits + '!@#%^&*') for _ in range(20)))")
+  python3 - <<PYEOF
 import os, sys
 sys.path.insert(0, '.')
 import auth
 auth.save_hashed_password(auth.hash_password("$PASS"))
 PYEOF
-
   echo -e "${YELLOW}${BOLD}╔════════════════════════════════════════╗${RESET}"
   echo -e "${YELLOW}${BOLD}║         FIRST-RUN ADMIN PASSWORD       ║${RESET}"
   echo -e "${YELLOW}${BOLD}╠════════════════════════════════════════╣${RESET}"
@@ -56,8 +51,7 @@ PYEOF
 fi
 
 echo -e "${GREEN}${BOLD}PDManager started${RESET}"
-echo -e "   Panel: ${BLUE}http://localhost:${PORT}${RESET}"
+echo -e "  Panel: ${BLUE}http://localhost:${PORT}${RESET}"
 echo -e "\nPress Ctrl+C to stop\n"
 
-# Start uvicorn via de venv executable
-./venv/bin/uvicorn main:app --host 0.0.0.0 --port "$PORT"
+uvicorn main:app --host 0.0.0.0 --port "$PORT"
