@@ -321,6 +321,10 @@ if os.path.isdir(FRONTEND_DIR):
     app.mount("/css", StaticFiles(directory=os.path.join(FRONTEND_DIR, "css")), name="css")
     app.mount("/js",  StaticFiles(directory=os.path.join(FRONTEND_DIR, "js")),  name="js")
 
+    @app.get("/favicon.svg", include_in_schema=False)
+    async def favicon():
+        return FileResponse(os.path.join(FRONTEND_DIR, "favicon.svg"), media_type="image/svg+xml")
+
     @app.get("/login", include_in_schema=False)
     @app.get("/login.html", include_in_schema=False)
     async def login_page():
@@ -333,18 +337,6 @@ if os.path.isdir(FRONTEND_DIR):
     @app.get("/", include_in_schema=False)
     async def index_page():
         return FileResponse(os.path.join(FRONTEND_DIR, "index.html"))
-
-    @app.get("/favicon.ico", include_in_schema=False)
-    async def favicon():
-        # Bepaal de lokatie van main.py
-        current_dir = os.path.dirname(os.path.abspath(__file__))
-        # Navigeer naar de juiste plek
-        favicon_path = os.path.join(current_dir, "..", "frontend", "assets", "favicon.svg")
-        
-        if os.path.exists(favicon_path):
-            return FileResponse(favicon_path, media_type="image/svg+xml")
-        # Optioneel: als favicon niet bestaat, geef 404 of een lege response
-        return Response(status_code=404)
 
     @app.get("/{full_path:path}", include_in_schema=False)
     async def catch_all(full_path: str):
