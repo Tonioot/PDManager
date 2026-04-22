@@ -160,11 +160,14 @@ async def lifespan(app: FastAPI):
             if a.pid:
                 if pm.is_process_running(a.pid, a.id):
                     a.status = "running"
+                    # Re-attach a log tailer so live streaming works after restart
+                    pm.attach_log_tailer(a.id, a.name, proc=None, seek_to_end=True)
                 else:
                     recovered = pm.find_process_by_port(a.port) if a.port else None
                     if recovered:
                         a.pid = recovered
                         a.status = "running"
+                        pm.attach_log_tailer(a.id, a.name, proc=None, seek_to_end=True)
                     else:
                         a.status = "stopped"
                         a.pid = None
@@ -332,7 +335,7 @@ if os.path.isdir(FRONTEND_DIR):
         return FileResponse(os.path.join(FRONTEND_DIR, "index.html"))
 
     app.get("/favicon.ico", include_in_schema=False)(lambda: FileResponse(os.path.join(FRONTEND_DIR, "assets", "favicon.svg")))
-    
+
     @app.get("/{full_path:path}", include_in_schema=False)
     async def catch_all(full_path: str):
         if full_path.startswith("api/") or full_path.startswith("ws/"):

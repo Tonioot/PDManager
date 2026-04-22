@@ -261,6 +261,71 @@ def get_process_stats(pid: int) -> dict:
         return {}
 
 
+def get_log_path(app_name: str) -> str:
+    return os.path.join(os.path.expanduser("~/.pdmanager/logs"), f"{_safe_dir_name(app_name)}.log")
+
+
+def attach_log_tailer(
+    app_id: int,
+    app_name: str,
+    proc: Optional[subprocess.Popen] = None,
+    seek_to_end: bool = False,
+) -> None:
+    """Tail a log file and push new lines to log_buffers / subscribers.
+
+    Uses the log file directly so the child process is not coupled to
+    pdmanager via a pipe — pdmanager restarts no longer send SIGPIPE to apps.
+    """
+    log_path = get_log_path(app_name)
+
+    def _reader():
+        try:
+            # Wait briefly if the file hasn't been created yet (fast start)
+            for _ in range(20):
+                if os.path.exists(log_path):
+                    break
+                time.sleep(0.05)
+            else:
+                return
+
+            with open(log_path, "r") as f:
+                if seek_to_end:
+                    f.seek(0, 2)
+                while True:
+                    raw_line = f.readline()
+                    if raw_line:
+                        line = raw_line.rstrip()
+                        log_buffers[app_id].append(line)
+                        _push_line(app_id, line)
+                    else:
+                        # Determine whether the process is still alive
+                        if proc is not None:
+                            if proc.poll() is not None:
+                                # Read any last bytes the OS may have buffered
+                                for raw in f:
+                                    l = raw.rstrip()
+                                    log_buffers[app_id].append(l)
+                                    _push_line(app_id, l)
+                                break
+                        else:
+                            reg = _pid_registry.get(app_id)
+                            if not reg:
+                                break
+                            pid = reg.get("pid")
+                            ct  = reg.get("create_time")
+                            if pid and not _pid_alive(pid, ct):
+                                for raw in f:
+                                    l = raw.rstrip()
+                                    log_buffers[app_id].append(l)
+                                    _push_line(app_id, l)
+                                break
+                        time.sleep(0.05)
+        except Exception:
+            pass
+
+    threading.Thread(target=_reader, daemon=True).start()
+
+
 def start_app(app_id: int, app_name: str, command: str, working_dir: str, env_vars: dict = None) -> int:
     env = os.environ.copy()
     if env_vars:
@@ -268,22 +333,25 @@ def start_app(app_id: int, app_name: str, command: str, working_dir: str, env_va
 
     log_buffers[app_id] = deque(maxlen=5000)
     _stats_history.pop(app_id, None)  # fresh process = fresh history
-    log_path = os.path.join(os.path.expanduser("~/.pdmanager/logs"), f"{_safe_dir_name(app_name)}.log")
+    log_path = get_log_path(app_name)
     os.makedirs(os.path.dirname(log_path), exist_ok=True)
-    log_file = open(log_path, "w")  # truncate: each start is a fresh session
+    # Open for writing; pass the fd directly so the child owns it.
+    # No pipe means pdmanager restarts never send SIGPIPE to the child.
+    log_file = open(log_path, "w")
 
     proc = subprocess.Popen(
         command,
         shell=True,
         cwd=working_dir,
         env=env,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
-        text=True,
-        bufsize=1,
+        stdout=log_file,
+        stderr=log_file,
         # New session so we can kill the whole process group cleanly
         start_new_session=True,
     )
+    # Parent no longer needs the fd; child has its own copy
+    log_file.close()
+
     running_processes[app_id] = proc
     shell_pid = proc.pid
 
@@ -310,20 +378,7 @@ def start_app(app_id: int, app_name: str, command: str, working_dir: str, env_va
         _pid_registry[app_id] = {"pid": actual_pid, "shell_pid": shell_pid}
         _save_registry()
 
-    def _reader():
-        try:
-            for raw_line in iter(proc.stdout.readline, ""):
-                line = raw_line.rstrip()
-                log_buffers[app_id].append(line)
-                log_file.write(raw_line)
-                log_file.flush()
-                _push_line(app_id, line)
-        except Exception:
-            pass
-        finally:
-            log_file.close()
-
-    threading.Thread(target=_reader, daemon=True).start()
+    attach_log_tailer(app_id, app_name, proc=proc, seek_to_end=False)
     return actual_pid
 
 
