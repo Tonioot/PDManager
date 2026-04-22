@@ -335,8 +335,16 @@ if os.path.isdir(FRONTEND_DIR):
         return FileResponse(os.path.join(FRONTEND_DIR, "index.html"))
 
     @app.get("/favicon.ico", include_in_schema=False)
-    async def favicon():
-        return FileResponse(os.path.join(FRONTEND_DIR, "assets", "favicon.svg"))
+        async def favicon():
+        # Bepaal de lokatie van main.py
+            current_dir = os.path.dirname(os.path.abspath(__file__))
+    
+        # Navigeer naar de juiste plek: uit 'backend', in 'frontend/assets/favicon.svg'
+            favicon_path = os.path.join(current_dir, "..", "frontend", "assets", "favicon.svg")
+    
+        # Controleer of het bestand echt bestaat voor we het proberen te sturen
+            if os.path.exists(favicon_path):
+                return FileResponse(favicon_path, media_type="image/svg+xml")
 
     @app.get("/{full_path:path}", include_in_schema=False)
     async def catch_all(full_path: str):
