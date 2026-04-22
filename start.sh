@@ -5,11 +5,11 @@
 set -e
 
 # --- Configuratie ---
-INSTALL_DIR="/home/tonio/PDManager"
+INSTALL_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BACKEND_DIR="$INSTALL_DIR/backend"
 VENV_PATH="$BACKEND_DIR/venv"
 PORT=7823
-CREDS="/home/tonio/.pdmanager/credentials"
+CREDS="$HOME/.pdmanager/credentials"
 
 # Kleuren voor de logs
 GREEN='\033[0;32m'
