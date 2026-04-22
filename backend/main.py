@@ -331,6 +331,8 @@ if os.path.isdir(FRONTEND_DIR):
     async def index_page():
         return FileResponse(os.path.join(FRONTEND_DIR, "index.html"))
 
+    app.get("/favicon.ico", include_in_schema=False)(lambda: FileResponse(os.path.join(FRONTEND_DIR, "assets", "favicon.svg")))
+    
     @app.get("/{full_path:path}", include_in_schema=False)
     async def catch_all(full_path: str):
         if full_path.startswith("api/") or full_path.startswith("ws/"):
