@@ -277,6 +277,9 @@ def attach_log_tailer(
     pdmanager via a pipe — pdmanager restarts no longer send SIGPIPE to apps.
     """
     log_path = get_log_path(app_name)
+    # Ensure the buffer exists before the thread starts appending to it
+    if app_id not in log_buffers:
+        log_buffers[app_id] = deque(maxlen=5000)
 
     def _reader():
         try:
