@@ -13,6 +13,7 @@ from typing import Optional
 
 APPS_BASE_DIR = os.path.expanduser("~/.pdmanager/apps")
 REGISTRY_PATH = os.path.expanduser("~/.pdmanager/pid_registry.json")
+DEBUG_LOG_PATH = os.path.expanduser("~/.pdmanager/pdmanager-debug.log")
 os.makedirs(APPS_BASE_DIR, exist_ok=True)
 
 # Recent lines for history (capped, no tracking issues)
@@ -336,6 +337,16 @@ def _systemd_run() -> str | None:
     return shutil.which("systemd-run")
 
 
+def _debug(msg: str) -> None:
+    """Append a timestamped line to the PDManager debug log."""
+    try:
+        os.makedirs(os.path.dirname(DEBUG_LOG_PATH), exist_ok=True)
+        with open(DEBUG_LOG_PATH, "a") as f:
+            f.write(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] {msg}\n")
+    except Exception:
+        pass
+
+
 def start_app(app_id: int, app_name: str, command: str, working_dir: str, env_vars: dict = None) -> int:
     env = os.environ.copy()
     if env_vars:
@@ -351,7 +362,7 @@ def start_app(app_id: int, app_name: str, command: str, working_dir: str, env_va
 
     systemd_run = _systemd_run()
     use_systemd = False
-    if use_systemd:
+    if systemd_run:
         # Quick probe: can we actually use systemd-run --user?
         try:
             result = subprocess.run(
@@ -359,8 +370,14 @@ def start_app(app_id: int, app_name: str, command: str, working_dir: str, env_va
                 capture_output=True, timeout=5,
             )
             use_systemd = result.returncode == 0
-        except Exception:
+            _debug(f"systemd-run probe for app {app_id}: returncode={result.returncode} use_systemd={use_systemd}")
+            if not use_systemd:
+                _debug(f"  stderr: {result.stderr.decode(errors='replace').strip()}")
+        except Exception as e:
+            _debug(f"systemd-run probe failed for app {app_id}: {e}")
             use_systemd = False
+    else:
+        _debug(f"systemd-run not found on PATH for app {app_id} — using start_new_session fallback")
 
     if use_systemd:
         # Wrap in a transient user-scope unit so the app lives in its own
@@ -386,6 +403,7 @@ def start_app(app_id: int, app_name: str, command: str, working_dir: str, env_va
             stderr=log_file,
             start_new_session=True,
         )
+        _debug(f"app {app_id} started via systemd-run --user --scope, shell_pid={proc.pid}")
     else:
         # Fallback: no systemd-run — start_new_session prevents SIGHUP;
         # note apps may be killed by cgroup teardown on systemd systems.
@@ -398,6 +416,7 @@ def start_app(app_id: int, app_name: str, command: str, working_dir: str, env_va
             stderr=log_file,
             start_new_session=True,
         )
+        _debug(f"app {app_id} started via start_new_session fallback, shell_pid={proc.pid}")
     # Parent no longer needs the fd; child has its own copy
     log_file.close()
 
@@ -423,7 +442,9 @@ def start_app(app_id: int, app_name: str, command: str, working_dir: str, env_va
             "create_time": create_time,
         }
         _save_registry()
-    except Exception:
+        _debug(f"app {app_id} registry saved: pid={actual_pid} shell_pid={shell_pid} create_time={create_time:.2f}")
+    except Exception as e:
+        _debug(f"app {app_id} registry save error: {e}")
         _pid_registry[app_id] = {"pid": actual_pid, "shell_pid": shell_pid}
         _save_registry()
 

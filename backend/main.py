@@ -161,15 +161,18 @@ async def lifespan(app: FastAPI):
             if a.pid:
                 if pm.is_process_running(a.pid, a.id):
                     a.status = "running"
+                    pm._debug(f"RECOVERY app {a.id} ({a.name}): pid={a.pid} still alive → running")
                     # Re-attach a log tailer so live streaming works after restart
                     pm.attach_log_tailer(a.id, a.name, proc=None, seek_to_end=True)
                 else:
                     recovered = pm.find_process_by_port(a.port) if a.port else None
                     if recovered:
+                        pm._debug(f"RECOVERY app {a.id} ({a.name}): pid={a.pid} dead but found port-match pid={recovered}")
                         a.pid = recovered
                         a.status = "running"
                         pm.attach_log_tailer(a.id, a.name, proc=None, seek_to_end=True)
                     else:
+                        pm._debug(f"RECOVERY app {a.id} ({a.name}): pid={a.pid} dead, no port match → stopped")
                         a.status = "stopped"
                         a.pid = None
 
@@ -179,8 +182,9 @@ async def lifespan(app: FastAPI):
                     pid = pm.start_app(a.id, a.name, a.start_command, a.working_dir, env_vars)
                     a.pid = pid
                     a.status = "running"
-                except Exception:
-                    pass
+                    pm._debug(f"AUTO-START app {a.id} ({a.name}): new pid={pid}")
+                except Exception as exc:
+                    pm._debug(f"AUTO-START app {a.id} ({a.name}): FAILED — {exc}")
 
         await db.commit()
 
@@ -350,6 +354,17 @@ async def delete_github_token(token_id: str):
 
 
 # /value endpoint intentionally omitted — raw tokens are resolved server-side only.
+
+
+@app.get("/api/system/debug-log")
+async def get_debug_log(lines: int = 200):
+    """Return the last N lines of the PDManager debug log."""
+    try:
+        with open(pm.DEBUG_LOG_PATH) as f:
+            all_lines = f.readlines()
+        return {"lines": [l.rstrip() for l in all_lines[-lines:]]}
+    except FileNotFoundError:
+        return {"lines": ["(debug log is empty — no events recorded yet)"]}
 
 
 # ── Routers ───────────────────────────────────────────────────────────────────
