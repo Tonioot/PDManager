@@ -615,68 +615,87 @@ function initSettings() {
 
   // Maintenance pages section
   initMaintenanceSettings();
+  _initMaintModal();
 }
 
 /* ─── Maintenance pages settings ────────────────────────────────────────── */
+let _maintModalType = 'downtime'; // currently open card type
+
 function initMaintenanceSettings() {
   const hasNginx = !!app.nginx_enabled;
   const noNginxWarn = document.getElementById('maint-no-nginx-warn');
   if (noNginxWarn) noNginxWarn.style.display = hasNginx ? 'none' : '';
 
-  // Disable all inputs when nginx not configured
-  const section = document.getElementById('maintenance-pages-section');
-  section.querySelectorAll('input, textarea, button, select').forEach(el => {
-    el.disabled = !hasNginx;
-  });
-
-  // Populate fields from current app data
-  const dt = app.downtime_page || {};
-  const up = app.update_page   || {};
-
-  _fillMaintenanceCard('downtime', {
-    title:       dt.title       || '',
-    message:     dt.message     || '',
-    color:       dt.color       || '#f85149',
-    custom_html: dt.custom_html || '',
-  });
-  _fillMaintenanceCard('update', {
-    title:       up.title       || '',
-    message:     up.message     || '',
-    color:       up.color       || '#f0883e',
-    custom_html: up.custom_html || '',
-  });
+  // Disable open buttons when nginx not configured
+  document.getElementById('btn-open-downtime-modal').disabled = !hasNginx;
+  document.getElementById('btn-open-update-modal').disabled   = !hasNginx;
 
   // Status badges
   _updateMaintBadges();
 
   if (!hasNginx) return;
 
-  // Color picker ↔ hex input sync
-  for (const type of ['downtime', 'update']) {
-    const picker = document.getElementById(`maint-${type}-color-picker`);
-    const hex    = document.getElementById(`maint-${type}-color`);
-    picker.addEventListener('input', () => { hex.value = picker.value; });
-    hex.addEventListener('input', () => {
-      if (/^#[0-9a-fA-F]{6}$/.test(hex.value)) picker.value = hex.value;
-    });
+  // Wire open buttons
+  document.getElementById('btn-open-downtime-modal').addEventListener('click', () => openMaintModal('downtime'));
+  document.getElementById('btn-open-update-modal').addEventListener('click',   () => openMaintModal('update'));
+}
 
-    // Custom HTML toggle
-    document.getElementById(`maint-${type}-custom-toggle`).addEventListener('change', e => {
-      document.getElementById(`maint-${type}-custom-wrap`).style.display = e.target.checked ? '' : 'none';
-    });
-  }
+function openMaintModal(type) {
+  _maintModalType = type;
+  const cfg  = (type === 'downtime' ? app.downtime_page : app.update_page) || {};
+  const isDown = type === 'downtime';
 
-  // Preview buttons — open rendered page in new tab
-  document.getElementById('btn-preview-downtime').addEventListener('click', () => {
-    window.open(`/api/apps/${APP_ID}/maintenance-pages/preview/downtime`, '_blank');
+  const backdrop = document.getElementById('maint-modal-backdrop');
+  backdrop.style.display = '';
+
+  document.getElementById('maint-modal-title').textContent = isDown ? 'Downtime Page' : 'Update Page';
+  document.getElementById('maint-modal-sub').textContent   = isDown
+    ? 'Shown automatically on 502/503 (crash or stop) and when Maintenance mode is on'
+    : 'Shown when Update Mode is manually enabled — ideal for planned deployments';
+
+  const color = cfg.color || (isDown ? '#f85149' : '#f0883e');
+  document.getElementById('maint-modal-title-input').value  = cfg.title   || '';
+  document.getElementById('maint-modal-message').value      = cfg.message || '';
+  document.getElementById('maint-modal-status-url').value   = cfg.status_url || '';
+  document.getElementById('maint-modal-color').value        = color;
+  document.getElementById('maint-modal-color-picker').value = color;
+
+  const hasCustom = !!cfg.custom_html;
+  document.getElementById('maint-modal-custom-toggle').checked     = hasCustom;
+  document.getElementById('maint-modal-custom-wrap').style.display = hasCustom ? '' : 'none';
+  document.getElementById('maint-modal-custom-html').value         = cfg.custom_html || '';
+}
+
+function _initMaintModal() {
+  const backdrop = document.getElementById('maint-modal-backdrop');
+  if (!backdrop) return;
+
+  // Close on backdrop click or cancel button
+  const close = () => { backdrop.style.display = 'none'; };
+  backdrop.addEventListener('click', e => { if (e.target === backdrop) close(); });
+  document.getElementById('maint-modal-close').addEventListener('click', close);
+  document.getElementById('maint-modal-cancel').addEventListener('click', close);
+
+  // Color picker ↔ hex sync
+  const picker = document.getElementById('maint-modal-color-picker');
+  const hex    = document.getElementById('maint-modal-color');
+  picker.addEventListener('input', () => { hex.value = picker.value; });
+  hex.addEventListener('input', () => {
+    if (/^#[0-9a-fA-F]{6}$/.test(hex.value)) picker.value = hex.value;
   });
-  document.getElementById('btn-preview-update').addEventListener('click', () => {
-    window.open(`/api/apps/${APP_ID}/maintenance-pages/preview/update`, '_blank');
+
+  // Custom HTML toggle
+  document.getElementById('maint-modal-custom-toggle').addEventListener('change', e => {
+    document.getElementById('maint-modal-custom-wrap').style.display = e.target.checked ? '' : 'none';
   });
 
-  // Save buttons
-  document.getElementById('btn-save-downtime').addEventListener('click', () => saveMaintenancePage('downtime'));
-  document.getElementById('btn-save-update').addEventListener('click',   () => saveMaintenancePage('update'));
+  // Preview
+  document.getElementById('maint-modal-preview').addEventListener('click', () => {
+    window.open(`/api/apps/${APP_ID}/maintenance-pages/preview/${_maintModalType}`, '_blank');
+  });
+
+  // Save
+  document.getElementById('maint-modal-save').addEventListener('click', () => saveMaintenancePage(_maintModalType));
 }
 
 function _updateMaintBadges() {
@@ -687,40 +706,28 @@ function _updateMaintBadges() {
   const isMaint  = !!app.maintenance_mode;
   const isUpdate = !!app.update_mode;
 
-  downtimeBadge.textContent = isMaint  ? 'Active' : 'Inactive';
-  downtimeBadge.className   = `maint-mode-badge ${isMaint  ? 'maint-badge--red'    : 'maint-badge--off'}`;
+  downtimeBadge.textContent = isMaint  ? 'On' : 'Off';
+  downtimeBadge.className   = `maint-row-badge ${isMaint  ? 'maint-badge--red'    : 'maint-badge--off'}`;
 
-  updateBadge.textContent   = isUpdate ? 'Active' : 'Inactive';
-  updateBadge.className     = `maint-mode-badge ${isUpdate ? 'maint-badge--orange' : 'maint-badge--off'}`;
-}
-
-function _fillMaintenanceCard(type, cfg) {
-  document.getElementById(`maint-${type}-title`).value   = cfg.title;
-  document.getElementById(`maint-${type}-message`).value = cfg.message;
-  document.getElementById(`maint-${type}-color`).value   = cfg.color;
-  document.getElementById(`maint-${type}-color-picker`).value = cfg.color;
-
-  const hasCustom = !!cfg.custom_html;
-  document.getElementById(`maint-${type}-custom-toggle`).checked         = hasCustom;
-  document.getElementById(`maint-${type}-custom-wrap`).style.display     = hasCustom ? '' : 'none';
-  document.getElementById(`maint-${type}-custom-html`).value             = cfg.custom_html || '';
+  updateBadge.textContent   = isUpdate ? 'On' : 'Off';
+  updateBadge.className     = `maint-row-badge ${isUpdate ? 'maint-badge--orange' : 'maint-badge--off'}`;
 }
 
 async function saveMaintenancePage(type) {
-  const btnId = `btn-save-${type}`;
-  const btn   = document.getElementById(btnId);
-  const prev  = btn.innerHTML;
+  const btn  = document.getElementById('maint-modal-save');
+  const prev = btn.innerHTML;
   btn.disabled = true;
   btn.innerHTML = `${spinner} Saving…`;
 
   const getVal = id => document.getElementById(id)?.value ?? '';
 
   const pageData = {
-    title:       getVal(`maint-${type}-title`).trim()   || null,
-    message:     getVal(`maint-${type}-message`).trim() || null,
-    color:       getVal(`maint-${type}-color`).trim()   || null,
-    custom_html: document.getElementById(`maint-${type}-custom-toggle`)?.checked
-                   ? getVal(`maint-${type}-custom-html`) || null
+    title:      getVal('maint-modal-title-input').trim()  || null,
+    message:    getVal('maint-modal-message').trim()      || null,
+    color:      getVal('maint-modal-color').trim()        || null,
+    status_url: getVal('maint-modal-status-url').trim()   || null,
+    custom_html: document.getElementById('maint-modal-custom-toggle')?.checked
+                   ? getVal('maint-modal-custom-html') || null
                    : null,
   };
 
@@ -728,17 +735,17 @@ async function saveMaintenancePage(type) {
   const currentDt = app.downtime_page || {};
   const currentUp = app.update_page   || {};
   const payload = {
-    downtime_page: type === 'downtime' ? pageData : { title: currentDt.title, message: currentDt.message, color: currentDt.color, custom_html: currentDt.custom_html },
-    update_page:   type === 'update'   ? pageData : { title: currentUp.title, message: currentUp.message, color: currentUp.color, custom_html: currentUp.custom_html },
+    downtime_page: type === 'downtime' ? pageData : { title: currentDt.title, message: currentDt.message, color: currentDt.color, status_url: currentDt.status_url, custom_html: currentDt.custom_html },
+    update_page:   type === 'update'   ? pageData : { title: currentUp.title, message: currentUp.message, color: currentUp.color, status_url: currentUp.status_url, custom_html: currentUp.custom_html },
   };
 
   try {
     const res = await api.saveMaintenancePages(APP_ID, payload);
     if (res.ok) {
-      // Refresh local app state so the other card isn't overwritten on next open
       app = await api.getApp(APP_ID);
       _updateMaintBadges();
       toast(`${type === 'downtime' ? 'Downtime' : 'Update'} page saved`);
+      document.getElementById('maint-modal-backdrop').style.display = 'none';
     } else {
       toast(res.message || 'Save failed', 'error');
     }

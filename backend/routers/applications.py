@@ -51,6 +51,7 @@ class MaintenancePageConfig(BaseModel):
     title: str = ""
     message: str = ""
     color: str = "#f85149"
+    status_url: Optional[str] = None   # e.g. https://status.vexora.nl
     custom_html: Optional[str] = None
 
 
@@ -78,6 +79,7 @@ def _ensure_maintenance_files(app: Application, app_id: int) -> None:
         downtime_cfg.get("title")       or "Down for Maintenance",
         downtime_cfg.get("message")     or "We'll be back shortly.",
         downtime_cfg.get("color")       or "#f85149",
+        downtime_cfg.get("status_url"),
         downtime_cfg.get("custom_html"),
         "downtime",
     )
@@ -85,6 +87,7 @@ def _ensure_maintenance_files(app: Application, app_id: int) -> None:
         update_cfg.get("title")         or "Updating\u2026",
         update_cfg.get("message")       or "We\u2019re deploying a new version. Check back soon.",
         update_cfg.get("color")         or "#f0883e",
+        update_cfg.get("status_url"),
         update_cfg.get("custom_html"),
         "update",
     )
@@ -646,6 +649,7 @@ async def save_maintenance_pages(
         req.downtime_page.title   or "Down for Maintenance",
         req.downtime_page.message or "We'll be back shortly.",
         req.downtime_page.color   or "#f85149",
+        req.downtime_page.status_url,
         req.downtime_page.custom_html,
         "downtime",
     )
@@ -653,6 +657,7 @@ async def save_maintenance_pages(
         req.update_page.title   or "Updating\u2026",
         req.update_page.message or "We\u2019re deploying a new version. Check back soon.",
         req.update_page.color   or "#f0883e",
+        req.update_page.status_url,
         req.update_page.custom_html,
         "update",
     )
@@ -754,17 +759,19 @@ async def preview_maintenance_page(
 
     if page_type == "downtime":
         html = nm.generate_maintenance_html(
-            cfg.get("title")   or "Down for Maintenance",
-            cfg.get("message") or "We'll be back shortly.",
-            cfg.get("color")   or "#f85149",
+            cfg.get("title")      or "Down for Maintenance",
+            cfg.get("message")    or "We'll be back shortly.",
+            cfg.get("color")      or "#f85149",
+            cfg.get("status_url"),
             cfg.get("custom_html"),
             "downtime",
         )
     else:
         html = nm.generate_maintenance_html(
-            cfg.get("title")   or "Updating\u2026",
-            cfg.get("message") or "We\u2019re deploying a new version. Check back soon.",
-            cfg.get("color")   or "#f0883e",
+            cfg.get("title")      or "Updating\u2026",
+            cfg.get("message")    or "We\u2019re deploying a new version. Check back soon.",
+            cfg.get("color")      or "#f0883e",
+            cfg.get("status_url"),
             cfg.get("custom_html"),
             "update",
         )
@@ -818,6 +825,17 @@ async def nginx_debug(app_id: int, db: AsyncSession = Depends(get_db)):
             "sites_enabled_exists":   sp.run(["sudo", "test", "-L", enabled_path], capture_output=True).returncode == 0,
             "maintenance_dir_ls":     _ls(maint_dir),
             "nginx_config_content":   _read_file(config_path),
+        },
+        "conflicts": {
+            "description": "Other enabled nginx configs that also define this domain (should be empty)",
+            "files": [
+                line for line in
+                sp.run(
+                    ["sudo", "grep", "-rl", app.domain or "", nm.NGINX_ENABLED_DIR],
+                    capture_output=True, text=True,
+                ).stdout.strip().splitlines()
+                if line and not line.endswith("/" + safe_name)
+            ] if app.domain else [],
         },
         "generated_config": nm.generate_config(
             app.name, app.domain or "(no domain)", app.port or 0,

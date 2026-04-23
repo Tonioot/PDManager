@@ -464,25 +464,38 @@
 .settings-section.danger { border-color: var(--red-border); }
 .settings-section .section-title.danger { color: var(--red); }
 
-/* ─── Maintenance pages section ─────────────────────────────────────────── */
-.maint-section {
-  margin-bottom: 20px;
-}
-
-.maint-section-header {
+/* ─── Maintenance pages compact row ─────────────────────────────────────── */
+.maint-row {
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: 12px;
-  margin-bottom: 10px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 12px 16px;
+  margin-bottom: 16px;
 }
 
-.maint-section-title {
+.maint-row-left {
   display: flex;
   align-items: center;
-  gap: 7px;
+  gap: 8px;
+  flex-wrap: wrap;
+  color: var(--text-secondary);
   font-size: 13px;
+  min-width: 0;
+}
+
+.maint-row-label {
   font-weight: 600;
   color: var(--text-primary);
+  white-space: nowrap;
+}
+
+.maint-row-hint {
+  font-size: 12px;
+  color: var(--text-muted);
 }
 
 .maint-no-nginx-warn {
@@ -495,107 +508,41 @@
   border: 1px solid var(--yellow-border);
   border-radius: 20px;
   padding: 3px 10px;
+  white-space: nowrap;
 }
 
-.maint-how-it-works {
+.maint-row-actions {
   display: flex;
-  align-items: flex-start;
   gap: 8px;
-  background: var(--accent-bg);
-  border: 1px solid var(--accent-border);
-  border-radius: var(--radius-sm);
-  padding: 10px 14px;
-  font-size: 12px;
-  color: var(--text-secondary);
-  line-height: 1.6;
-  margin-bottom: 14px;
-}
-.maint-how-it-works svg { flex-shrink: 0; margin-top: 1px; color: var(--accent); }
-.maint-how-it-works strong { color: var(--text-primary); }
-.maint-how-it-works em { font-style: normal; color: var(--text-primary); }
-
-.maint-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 14px;
-  align-items: start;
-}
-
-/* ── Individual maintenance card ── */
-.maint-card {
-  background: var(--bg-surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-}
-
-.maint-card--down  { border-top: 3px solid var(--red-border); }
-.maint-card--update { border-top: 3px solid rgba(255,166,87,0.35); }
-
-.maint-card-header {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 16px 18px 12px;
-  border-bottom: 1px solid var(--border-muted);
-}
-
-.maint-card-identity {
-  display: flex;
-  align-items: flex-start;
-  gap: 10px;
-}
-
-.maint-card-icon {
-  width: 30px; height: 30px;
-  border-radius: 8px;
-  display: flex; align-items: center; justify-content: center;
   flex-shrink: 0;
 }
-.maint-card-icon--red    { background: var(--red-bg);    color: var(--red);    border: 1px solid var(--red-border); }
-.maint-card-icon--orange { background: var(--orange-bg); color: var(--orange); border: 1px solid rgba(255,166,87,0.3); }
 
-.maint-card-name {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--text-primary);
-  margin-bottom: 3px;
+/* Buttons in the compact row */
+.maint-row-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 12px !important;
 }
+.maint-row-btn--red    { border-color: var(--red-border) !important; color: var(--red) !important; }
+.maint-row-btn--orange { border-color: rgba(255,166,87,0.3) !important; color: var(--orange) !important; }
+.maint-row-btn--red:hover    { background: var(--red-bg) !important; }
+.maint-row-btn--orange:hover { background: var(--orange-bg) !important; }
 
-.maint-card-desc {
-  font-size: 11px;
-  color: var(--text-muted);
-  line-height: 1.5;
-  max-width: 220px;
-}
-.maint-card-desc strong { color: var(--text-secondary); }
-
-/* Status badge on each card */
-.maint-mode-badge {
-  display: inline-flex; align-items: center;
+/* Small status badge inside the row button */
+.maint-row-badge {
   border-radius: 20px;
-  padding: 3px 9px;
+  padding: 1px 7px;
   font-size: 10px;
   font-weight: 700;
-  letter-spacing: 0.05em;
+  letter-spacing: 0.04em;
   text-transform: uppercase;
-  white-space: nowrap;
-  flex-shrink: 0;
 }
 .maint-badge--off    { background: var(--bg-muted); color: var(--text-muted); border: 1px solid var(--border); }
 .maint-badge--red    { background: var(--red-bg);   color: var(--red);   border: 1px solid var(--red-border); }
 .maint-badge--orange { background: var(--orange-bg); color: var(--orange); border: 1px solid rgba(255,166,87,0.3); }
 
-.maint-card-fields {
-  padding: 14px 18px;
-  display: flex;
-  flex-direction: column;
-  gap: 0;
-}
-
+/* Shared color swatch used in modal */
 .maint-color-row {
   display: flex;
   align-items: center;
@@ -611,12 +558,20 @@
   flex-shrink: 0;
 }
 
-.maint-card-footer {
+/* ─── Maintenance page editor modal ─────────────────────────────────────── */
+.maint-modal {
+  width: 520px;
+  max-width: 96vw;
+}
+
+.modal-footer {
   display: flex;
+  align-items: center;
   gap: 8px;
-  padding: 12px 18px;
-  border-top: 1px solid var(--border-muted);
+  padding: 14px 20px;
+  border-top: 1px solid var(--border);
   background: var(--bg-elevated);
+  border-radius: 0 0 var(--radius-lg) var(--radius-lg);
 }
 
 .info-row {

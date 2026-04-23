@@ -15,6 +15,7 @@ def generate_maintenance_html(
     title: str,
     message: str,
     color: str,
+    status_url: str = None,
     custom_html: str = None,
     page_type: str = "downtime",
 ) -> str:
@@ -25,13 +26,23 @@ def generate_maintenance_html(
     safe_title   = title.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
     safe_message = message.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
     safe_color   = color if color.startswith("#") and len(color) in (4, 7) else "#f85149"
+    # Validate URL to prevent injection
+    import re as _re
+    safe_status_url = status_url if status_url and _re.match(r'^https?://', status_url) else None
 
     if page_type == "downtime":
-        return _downtime_template(safe_title, safe_message, safe_color)
-    return _update_template(safe_title, safe_message, safe_color)
+        return _downtime_template(safe_title, safe_message, safe_color, safe_status_url)
+    return _update_template(safe_title, safe_message, safe_color, safe_status_url)
 
 
-def _downtime_template(title: str, message: str, color: str) -> str:
+def _downtime_template(title: str, message: str, color: str, status_url: str = None) -> str:
+    status_btn = f"""
+    <a class="status-link" href="{status_url}" target="_blank" rel="noopener noreferrer">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 8 12 12 14 14"/></svg>
+      View status page
+      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="7" y1="17" x2="17" y2="7"/><polyline points="7 7 17 7 17 17"/></svg>
+    </a>""" if status_url else ""
+
     return f"""<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -42,7 +53,7 @@ def _downtime_template(title: str, message: str, color: str) -> str:
     *, *::before, *::after {{ box-sizing: border-box; margin: 0; padding: 0; }}
     body {{
       font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', sans-serif;
-      background: #070c18;
+      background: #060a12;
       color: #e2e8f0;
       min-height: 100vh;
       display: flex;
@@ -51,87 +62,118 @@ def _downtime_template(title: str, message: str, color: str) -> str:
       justify-content: center;
       padding: 40px 24px;
     }}
-    .card {{
-      background: #0f172a;
-      border: 1px solid #1e2d40;
-      border-radius: 20px;
-      padding: 52px 56px;
-      max-width: 560px;
+    .wrap {{
+      max-width: 480px;
       width: 100%;
       text-align: center;
-      box-shadow: 0 25px 80px rgba(0,0,0,0.65), 0 0 0 1px rgba(255,255,255,0.03);
     }}
-    .status-pill {{
+    .logo-ring {{
+      width: 72px; height: 72px;
+      border-radius: 50%;
+      background: rgba(255,255,255,0.03);
+      border: 1px solid rgba(255,255,255,0.07);
+      display: flex; align-items: center; justify-content: center;
+      margin: 0 auto 28px;
+      position: relative;
+    }}
+    .logo-ring::before {{
+      content: '';
+      position: absolute;
+      inset: -4px;
+      border-radius: 50%;
+      border: 2px solid transparent;
+      border-top-color: {color};
+      animation: spin 2.5s linear infinite;
+    }}
+    @keyframes spin {{ to {{ transform: rotate(360deg); }} }}
+    .logo-ring svg {{ opacity: 0.7; }}
+    .badge {{
       display: inline-flex;
       align-items: center;
-      gap: 8px;
-      background: rgba(248,81,73,0.12);
-      border: 1px solid rgba(248,81,73,0.25);
+      gap: 7px;
+      background: color-mix(in srgb, {color} 12%, transparent);
+      border: 1px solid color-mix(in srgb, {color} 28%, transparent);
       border-radius: 100px;
-      padding: 7px 18px;
-      margin-bottom: 36px;
-      font-size: 11px;
+      padding: 5px 14px;
+      margin-bottom: 24px;
+      font-size: 10.5px;
       font-weight: 700;
-      letter-spacing: 0.1em;
+      letter-spacing: 0.08em;
       text-transform: uppercase;
       color: {color};
     }}
-    .pulse-dot {{
-      width: 7px; height: 7px; border-radius: 50%;
+    .dot {{
+      width: 6px; height: 6px; border-radius: 50%;
       background: {color};
-      animation: pulse 2s ease-in-out infinite;
+      animation: blink 1.8s ease-in-out infinite;
     }}
-    @keyframes pulse {{ 0%, 100% {{ opacity: 1; }} 50% {{ opacity: 0.25; }} }}
+    @keyframes blink {{ 0%, 100% {{ opacity: 1; }} 50% {{ opacity: 0.2; }} }}
     h1 {{
-      font-size: 30px; font-weight: 700;
-      color: #f8fafc; margin-bottom: 16px;
-      letter-spacing: -0.025em; line-height: 1.2;
+      font-size: 28px; font-weight: 700;
+      color: #f1f5f9;
+      letter-spacing: -0.03em; line-height: 1.2;
+      margin-bottom: 12px;
     }}
     .msg {{
-      font-size: 15px; color: #64748b;
-      line-height: 1.8; margin-bottom: 40px;
+      font-size: 15px;
+      color: #64748b;
+      line-height: 1.75;
+      margin-bottom: 32px;
     }}
-    hr {{ border: none; border-top: 1px solid #1e2d40; margin-bottom: 28px; }}
-    .footer {{ font-size: 12px; color: #2d3f55; line-height: 1.6; }}
-    .dots {{
-      display: flex; gap: 6px;
-      justify-content: center; margin-top: 36px;
+    .divider {{
+      width: 48px; height: 2px;
+      background: linear-gradient(90deg, transparent, {color}, transparent);
+      border-radius: 2px;
+      margin: 0 auto 28px;
     }}
-    .dots span {{
-      width: 6px; height: 6px; border-radius: 50%;
-      background: #1e2d40;
-      animation: dot 1.4s ease-in-out infinite;
+    .status-link {{
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12.5px;
+      font-weight: 500;
+      color: {color};
+      text-decoration: none;
+      opacity: 0.75;
+      transition: opacity 0.15s;
     }}
-    .dots span:nth-child(2) {{ animation-delay: 0.2s; }}
-    .dots span:nth-child(3) {{ animation-delay: 0.4s; }}
-    @keyframes dot {{
-      0%, 80%, 100% {{ background: #1e2d40; transform: scale(0.8); }}
-      40% {{ background: {color}; transform: scale(1.2); }}
+    .status-link:hover {{ opacity: 1; }}
+    .footer {{
+      margin-top: 48px;
+      font-size: 11px;
+      color: #1e293b;
+      letter-spacing: 0.02em;
     }}
   </style>
 </head>
 <body>
-  <div class="card">
-    <div class="status-pill">
-      <span class="pulse-dot"></span>
+  <div class="wrap">
+    <div class="logo-ring">
+      <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="{color}" stroke-width="1.5" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/></svg>
+    </div>
+    <div class="badge">
+      <span class="dot"></span>
       Service Unavailable
     </div>
     <h1>{title}</h1>
     <p class="msg">{message}</p>
-    <hr>
-    <div class="footer">
-      We're working on restoring the service.<br>This page will reflect the latest status.
-    </div>
-    <div class="dots">
-      <span></span><span></span><span></span>
-    </div>
+    <div class="divider"></div>
+    {status_btn}
+    <div class="footer">We&rsquo;re working on it &mdash; this page updates automatically.</div>
   </div>
 </body>
 </html>
 """
 
 
-def _update_template(title: str, message: str, color: str) -> str:
+def _update_template(title: str, message: str, color: str, status_url: str = None) -> str:
+    status_btn = f"""
+    <a class="status-link" href="{status_url}" target="_blank" rel="noopener noreferrer">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 8 12 12 14 14"/></svg>
+      View status page
+      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="7" y1="17" x2="17" y2="7"/><polyline points="7 7 17 7 17 17"/></svg>
+    </a>""" if status_url else ""
+
     return f"""<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -143,7 +185,7 @@ def _update_template(title: str, message: str, color: str) -> str:
     *, *::before, *::after {{ box-sizing: border-box; margin: 0; padding: 0; }}
     body {{
       font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', sans-serif;
-      background: #070c18;
+      background: #060a12;
       color: #e2e8f0;
       min-height: 100vh;
       display: flex;
@@ -152,88 +194,103 @@ def _update_template(title: str, message: str, color: str) -> str:
       justify-content: center;
       padding: 40px 24px;
     }}
-    .card {{
-      background: #0f172a;
-      border: 1px solid #1e2d40;
-      border-radius: 20px;
-      padding: 52px 56px;
-      max-width: 560px;
+    .wrap {{
+      max-width: 480px;
       width: 100%;
       text-align: center;
-      box-shadow: 0 25px 80px rgba(0,0,0,0.65), 0 0 0 1px rgba(255,255,255,0.03);
     }}
-    .rocket {{
-      font-size: 56px;
-      display: block;
-      margin-bottom: 32px;
-      animation: float 3.5s ease-in-out infinite;
+    .icon-wrap {{
+      width: 72px; height: 72px;
+      border-radius: 20px;
+      background: color-mix(in srgb, {color} 10%, transparent);
+      border: 1px solid color-mix(in srgb, {color} 22%, transparent);
+      display: flex; align-items: center; justify-content: center;
+      margin: 0 auto 28px;
     }}
-    @keyframes float {{
-      0%, 100% {{ transform: translateY(0) rotate(-5deg); }}
-      50% {{ transform: translateY(-14px) rotate(5deg); }}
-    }}
-    .status-pill {{
+    .badge {{
       display: inline-flex;
       align-items: center;
-      gap: 9px;
-      background: rgba(240,136,62,0.12);
-      border: 1px solid rgba(240,136,62,0.25);
+      gap: 8px;
+      background: color-mix(in srgb, {color} 10%, transparent);
+      border: 1px solid color-mix(in srgb, {color} 25%, transparent);
       border-radius: 100px;
-      padding: 7px 18px;
-      margin-bottom: 36px;
-      font-size: 11px;
+      padding: 5px 14px;
+      margin-bottom: 24px;
+      font-size: 10.5px;
       font-weight: 700;
-      letter-spacing: 0.1em;
+      letter-spacing: 0.08em;
       text-transform: uppercase;
       color: {color};
     }}
     .spinner {{
-      width: 11px; height: 11px; border-radius: 50%;
-      border: 2px solid rgba(240,136,62,0.25);
+      width: 10px; height: 10px; border-radius: 50%;
+      border: 2px solid color-mix(in srgb, {color} 25%, transparent);
       border-top-color: {color};
-      animation: spin 0.75s linear infinite;
+      animation: spin 0.7s linear infinite;
     }}
     @keyframes spin {{ to {{ transform: rotate(360deg); }} }}
     h1 {{
-      font-size: 30px; font-weight: 700;
-      color: #f8fafc; margin-bottom: 16px;
-      letter-spacing: -0.025em; line-height: 1.2;
+      font-size: 28px; font-weight: 700;
+      color: #f1f5f9;
+      letter-spacing: -0.03em; line-height: 1.2;
+      margin-bottom: 12px;
     }}
     .msg {{
-      font-size: 15px; color: #64748b;
-      line-height: 1.8; margin-bottom: 40px;
+      font-size: 15px;
+      color: #64748b;
+      line-height: 1.75;
+      margin-bottom: 32px;
     }}
-    .progress {{
-      background: #1e2d40;
+    .track {{
+      background: rgba(255,255,255,0.05);
       border-radius: 100px;
-      height: 3px;
+      height: 2px;
       overflow: hidden;
       margin-bottom: 32px;
     }}
-    .progress-bar {{
+    .bar {{
       height: 100%;
       background: linear-gradient(90deg, transparent, {color}, transparent);
-      border-radius: 100px;
-      animation: sweep 2s ease-in-out infinite;
+      animation: sweep 2.2s ease-in-out infinite;
     }}
     @keyframes sweep {{
-      0%   {{ width: 40%; margin-left: -40%; }}
-      100% {{ width: 40%; margin-left: 100%; }}
+      0%   {{ transform: translateX(-100%) scaleX(0.5); }}
+      100% {{ transform: translateX(200%) scaleX(0.5); }}
     }}
-    .footer {{ font-size: 12px; color: #2d3f55; }}
+    .status-link {{
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12.5px;
+      font-weight: 500;
+      color: {color};
+      text-decoration: none;
+      opacity: 0.75;
+      transition: opacity 0.15s;
+    }}
+    .status-link:hover {{ opacity: 1; }}
+    .footer {{
+      margin-top: 48px;
+      font-size: 11px;
+      color: #1e293b;
+      letter-spacing: 0.02em;
+    }}
   </style>
 </head>
 <body>
-  <div class="card">
-    <span class="rocket">🚀</span>
-    <div class="status-pill">
+  <div class="wrap">
+    <div class="icon-wrap">
+      <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="{color}" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 3 21 3 21 8"/><line x1="4" y1="20" x2="21" y2="3"/><polyline points="21 16 21 21 16 21"/><line x1="15" y1="15" x2="21" y2="21"/></svg>
+    </div>
+    <div class="badge">
       <span class="spinner"></span>
       Deploying Update
     </div>
     <h1>{title}</h1>
     <p class="msg">{message}</p>
-    <div class="progress"><div class="progress-bar"></div></div>
-    <div class="footer">Page refreshes automatically every 30 seconds.</div>
+    <div class="track"><div class="bar"></div></div>
+    {status_btn}
+    <div class="footer">Page auto-refreshes every 30 seconds.</div>
   </div>
 </body>
 </html>
