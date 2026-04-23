@@ -651,8 +651,25 @@ async def save_maintenance_pages(
         "update",
     )
     ok, msg = nm.write_maintenance_files(app_id, downtime_html, update_html)
+    if not ok:
+        await db.commit()
+        return {"ok": False, "message": msg}
+
+    # Regenerate and reload nginx if configured, so changes take effect immediately
+    if app.nginx_enabled and app.domain:
+        mode   = _get_nginx_mode(app)
+        config = nm.generate_config(
+            app.name, app.domain, app.port,
+            app.ssl_cert_path, app.ssl_key_path,
+            app_id=app_id, mode=mode,
+        )
+        nginx_ok, nginx_msg = nm.write_nginx_config(app.name, config)
+        if not nginx_ok:
+            await db.commit()
+            return {"ok": False, "message": f"Files saved but nginx reload failed: {nginx_msg}"}
+
     await db.commit()
-    return {"ok": ok, "message": "Saved" if ok else msg}
+    return {"ok": True, "message": "Saved"}
 
 
 @router.post("/{app_id}/maintenance-mode/toggle")
