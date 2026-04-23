@@ -127,6 +127,64 @@ async function toggleMode(type) {
   }
 }
 
+function updateHeaderStatus() {
+  document.getElementById('app-badge').innerHTML = badge(app.status);
+
+  const s = app.status;
+  const busy = (s === 'deploying');
+
+  const btnStart   = document.getElementById('btn-start');
+  const btnStop    = document.getElementById('btn-stop');
+  const btnRestart = document.getElementById('btn-restart');
+
+  btnStart.disabled   = (s === 'running') || busy;
+  btnStop.disabled    = (s === 'stopped') || busy;
+  btnRestart.disabled = busy;
+
+  btnStart.style.opacity = (s === 'running') ? '0.4' : '1';
+  btnStop.style.opacity  = (s === 'stopped') ? '0.4' : '1';
+
+  const btnMaint  = document.getElementById('btn-maintenance-mode');
+  const btnUpdate = document.getElementById('btn-update-mode');
+  if (btnMaint && btnUpdate) {
+    const hasNginx = !!app.nginx_enabled;
+    btnMaint.disabled = !hasNginx;
+    btnUpdate.disabled = !hasNginx;
+    btnMaint.title = hasNginx
+      ? 'Toggle downtime mode - serves the custom downtime page via nginx'
+      : 'Requires a configured nginx domain';
+    btnUpdate.title = hasNginx
+      ? 'Toggle update mode - serves the custom update page via nginx'
+      : 'Requires a configured nginx domain';
+    btnMaint.classList.toggle('active-maintenance', !!app.maintenance_mode);
+    btnUpdate.classList.toggle('active-update', !!app.update_mode);
+  }
+}
+
+async function toggleMode(type) {
+  const btnId = type === 'maintenance' ? 'btn-maintenance-mode' : 'btn-update-mode';
+  const btn = document.getElementById(btnId);
+  const prev = btn.innerHTML;
+  btn.disabled = true;
+  btn.innerHTML = `${spinner} ...`;
+
+  try {
+    const fn = type === 'maintenance' ? api.toggleMaintenanceMode : api.toggleUpdateMode;
+    app = await fn(APP_ID);
+    updateHeaderStatus();
+    _updateMaintBadges();
+    const isOn = type === 'maintenance' ? app.maintenance_mode : app.update_mode;
+    toast(isOn ? `${type === 'maintenance' ? 'Downtime' : 'Update'} mode enabled`
+               : `${type === 'maintenance' ? 'Downtime' : 'Update'} mode disabled`);
+  } catch (e) {
+    toast(e.message, 'error');
+    try { app = await api.getApp(APP_ID); updateHeaderStatus(); } catch {}
+  } finally {
+    btn.innerHTML = prev;
+    btn.disabled = !app.nginx_enabled;
+  }
+}
+
 async function quickAction(action) {
   const btn = document.getElementById(`btn-${action}`);
   const prev = btn.innerHTML;
@@ -669,6 +727,50 @@ function openMaintModal(type) {
   document.getElementById('maint-modal-color-picker').value = color;
 
   // Logo
+  _maintLogoData = cfg.logo_data || null;
+  const logoPreview = document.getElementById('maint-modal-logo-preview');
+  const btnLogoClr  = document.getElementById('btn-maint-logo-clear');
+  if (_maintLogoData) {
+    document.getElementById('maint-modal-logo-img').src = _maintLogoData;
+    logoPreview.style.display = '';
+    btnLogoClr.style.display  = '';
+  } else {
+    logoPreview.style.display = 'none';
+    btnLogoClr.style.display  = 'none';
+  }
+
+  const hasCustom = !!cfg.custom_html;
+  document.getElementById('maint-modal-custom-toggle').checked     = hasCustom;
+  document.getElementById('maint-modal-custom-wrap').style.display = hasCustom ? '' : 'none';
+  document.getElementById('maint-modal-custom-html').value         = cfg.custom_html || '';
+}
+
+function openMaintModal(type) {
+  _maintModalType = type;
+  let cfg;
+  if (type === 'downtime')      cfg = app.downtime_page || {};
+  else if (type === 'restart')  cfg = app.restart_page  || {};
+  else                          cfg = app.update_page   || {};
+  const isDown    = type === 'downtime';
+  const isRestart = type === 'restart';
+
+  const backdrop = document.getElementById('maint-modal-backdrop');
+  backdrop.style.display = '';
+
+  document.getElementById('maint-modal-title').textContent = isDown ? 'Downtime Page' : isRestart ? 'Restart Page' : 'Update Page';
+  document.getElementById('maint-modal-sub').textContent = isDown
+    ? 'Shown automatically on 502/503 (crash or stop) and when Downtime mode is on'
+    : isRestart
+    ? 'Shown automatically whenever the Restart button is pressed - clears when the app is back up'
+    : 'Shown when Update mode is manually enabled - ideal for planned deployments';
+
+  const color = cfg.color || (isDown ? '#f85149' : isRestart ? '#388bfd' : '#f0883e');
+  document.getElementById('maint-modal-title-input').value  = cfg.title   || '';
+  document.getElementById('maint-modal-message').value      = cfg.message || '';
+  document.getElementById('maint-modal-status-url').value   = cfg.status_url || '';
+  document.getElementById('maint-modal-color').value        = color;
+  document.getElementById('maint-modal-color-picker').value = color;
+
   _maintLogoData = cfg.logo_data || null;
   const logoPreview = document.getElementById('maint-modal-logo-preview');
   const btnLogoClr  = document.getElementById('btn-maint-logo-clear');

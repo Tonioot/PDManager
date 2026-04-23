@@ -41,6 +41,44 @@ MAX_RESTARTS_PER_WINDOW = 5
 RESTART_WINDOW_SECONDS = 60
 
 
+def _restore_stuck_restart_configs(apps: list[Application]) -> None:
+    for app in apps:
+        if not (app.nginx_enabled and app.domain and app.port):
+            continue
+        if app.maintenance_mode or app.update_mode:
+            continue
+
+        config_path = nm.get_config_path(app.name)
+        try:
+            if not os.path.exists(config_path):
+                continue
+            with open(config_path, encoding="utf-8") as f:
+                current_config = f.read()
+        except Exception:
+            continue
+
+        if not nm.config_uses_restart_page(current_config):
+            continue
+
+        pm._debug(
+            f"STARTUP nginx recovery for app {app.id} ({app.name}): "
+            "restart page config detected, restoring normal proxy"
+        )
+        normal_cfg = nm.generate_config(
+            app.name,
+            app.domain,
+            app.port,
+            app.ssl_cert_path,
+            app.ssl_key_path,
+            app_id=app.id,
+            mode="normal",
+        )
+        ok, msg = nm.write_nginx_config(app.name, normal_cfg)
+        pm._debug(f"STARTUP nginx recovery result for app {app.id} ({app.name}): ok={ok} msg={msg!r}")
+        if ok:
+            pm._push_line(app.id, "Recovered a stale restart page after PDManager startup.")
+
+
 # ── Background stats collector ────────────────────────────────────────────────
 async def _stats_collector():
     """Collect process stats for all running apps every 2 s, push to subscribers."""
@@ -163,7 +201,8 @@ async def lifespan(app: FastAPI):
     # Recover running apps and auto-start
     async with AsyncSessionLocal() as db:
         result = await db.execute(select(Application))
-        for a in result.scalars().all():
+        apps = result.scalars().all()
+        for a in apps:
             if a.pid:
                 if pm.is_process_running(a.pid, a.id):
                     a.status = "running"
@@ -193,6 +232,7 @@ async def lifespan(app: FastAPI):
                     pm._debug(f"AUTO-START app {a.id} ({a.name}): FAILED — {exc}")
 
         await db.commit()
+        await asyncio.to_thread(_restore_stuck_restart_configs, apps)
 
     monitor_task  = asyncio.create_task(_crash_monitor())
     stats_task    = asyncio.create_task(_stats_collector())

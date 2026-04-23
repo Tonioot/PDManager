@@ -579,6 +579,14 @@ def _safe_name(app_name: str) -> str:
     return re.sub(r'[^a-zA-Z0-9_-]', '_', app_name).lower()
 
 
+def get_config_path(app_name: str) -> str:
+    return os.path.join(NGINX_SITES_DIR, _safe_name(app_name))
+
+
+def config_uses_restart_page(content: str) -> bool:
+    return "try_files /restart.html =200;" in (content or "")
+
+
 def write_maintenance_files(app_id: int, downtime_html: str, update_html: str, restart_html: str = None) -> tuple[bool, str]:
     """Write downtime.html, update.html (and optionally restart.html) to /var/www/pdmanager/maintenance/{app_id}/."""
     app_dir = os.path.join(MAINTENANCE_DIR, str(app_id))
