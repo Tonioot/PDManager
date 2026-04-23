@@ -178,7 +178,33 @@
 
 .detail-name-row { display: flex; align-items: center; gap: 10px; }
 
-.detail-actions { display: flex; gap: 8px; }
+.detail-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+
+/* Separator between primary actions and mode toggles */
+.detail-actions-sep {
+  width: 1px;
+  height: 24px;
+  background: var(--border);
+  margin: 0 2px;
+}
+
+/* Maintenance / update mode toggle buttons */
+.btn-mode {
+  background: var(--bg-muted);
+  color: var(--text-secondary);
+  border-color: var(--border);
+}
+.btn-mode:hover:not(:disabled) { color: var(--text-primary); background: #2d333b; }
+.btn-mode.active-maintenance {
+  background: var(--red-bg);
+  color: var(--red);
+  border-color: var(--red-border);
+}
+.btn-mode.active-update {
+  background: var(--orange-bg);
+  color: var(--orange);
+  border-color: rgba(255,166,87,0.35);
+}
 
 /* ─── Tabs ──────────────────────────────────────────────────────────────── */
 .tabs {
@@ -437,6 +463,44 @@
 
 .settings-section.danger { border-color: var(--red-border); }
 .settings-section .section-title.danger { color: var(--red); }
+
+/* ─── Maintenance pages grid ────────────────────────────────────────────── */
+.maintenance-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-top: 16px;
+  align-items: start;
+}
+
+.maintenance-card {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.maintenance-card-head {
+  margin-bottom: 14px;
+}
+
+.maintenance-card-label {
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 3px;
+}
+
+.maintenance-card-sub {
+  display: block;
+  font-size: 11px;
+  color: var(--text-muted);
+  line-height: 1.5;
+}
 
 .info-row {
   display: flex;

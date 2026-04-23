@@ -95,6 +95,13 @@ mkdir -p ~/.pdmanager/{apps,logs,certs}
 success "Data directories created at ~/.pdmanager/"
 info "  Tip: place your SSL certificates in ~/.pdmanager/certs/ for easy discovery"
 
+# ── Maintenance pages dir (nginx serves static HTML from here) ────────────────
+if command -v nginx &>/dev/null; then
+  sudo mkdir -p /var/www/pdmanager/maintenance
+  sudo chmod 755 /var/www/pdmanager/maintenance
+  success "Maintenance pages directory created at /var/www/pdmanager/maintenance/"
+fi
+
 # ── Systemd service (optional) ────────────────────────────────────────────────
 if command -v systemctl &>/dev/null && [[ "$EUID" -ne 0 ]]; then
   echo ""

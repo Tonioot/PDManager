@@ -45,6 +45,48 @@ class UpdateRequest(BaseModel):
     restart_policy: Optional[str] = None   # no | always | on-failure
 
 
+class MaintenancePageConfig(BaseModel):
+    title: str = ""
+    message: str = ""
+    color: str = "#f85149"
+    custom_html: Optional[str] = None
+
+
+class MaintenanceSettings(BaseModel):
+    downtime_page: MaintenancePageConfig = MaintenancePageConfig()
+    update_page: MaintenancePageConfig = MaintenancePageConfig(color="#f0883e")
+
+
+def _get_nginx_mode(app: Application) -> str:
+    if app.update_mode:
+        return "update"
+    if app.maintenance_mode:
+        return "maintenance"
+    return "normal"
+
+
+def _ensure_maintenance_files(app: Application, app_id: int) -> None:
+    """Write maintenance HTML files from stored config (or defaults)."""
+    downtime_cfg = json.loads(app.downtime_page or "{}")
+    update_cfg   = json.loads(app.update_page   or "{}")
+
+    downtime_html = nm.generate_maintenance_html(
+        downtime_cfg.get("title")       or "Down for Maintenance",
+        downtime_cfg.get("message")     or "We'll be back shortly.",
+        downtime_cfg.get("color")       or "#f85149",
+        downtime_cfg.get("custom_html"),
+        "downtime",
+    )
+    update_html = nm.generate_maintenance_html(
+        update_cfg.get("title")         or "Updating\u2026",
+        update_cfg.get("message")       or "We\u2019re deploying a new version. Check back soon.",
+        update_cfg.get("color")         or "#f0883e",
+        update_cfg.get("custom_html"),
+        "update",
+    )
+    nm.write_maintenance_files(app_id, downtime_html, update_html)
+
+
 def _resolve_token(req_token: Optional[str], req_token_id: Optional[str]) -> Optional[str]:
     """Return raw token: prefer vault lookup, fall back to inline value."""
     if req_token_id:
@@ -312,9 +354,12 @@ async def deploy_app(req: DeployRequest, background_tasks: BackgroundTasks, db: 
             config = nm.generate_config(
                 app.name, app.domain, app.port,
                 app.ssl_cert_path, app.ssl_key_path,
+                app_id=app.id, mode=_get_nginx_mode(app),
             )
             ok, msg = nm.write_nginx_config(app.name, config)
             app.nginx_enabled = ok
+            if ok:
+                _ensure_maintenance_files(app, app.id)
 
         await db.commit()
         await db.refresh(app)
@@ -361,6 +406,7 @@ async def update_app(app_id: int, req: UpdateRequest, db: AsyncSession = Depends
         config = nm.generate_config(
             app.name, app.domain, app.port,
             app.ssl_cert_path, app.ssl_key_path,
+            app_id=app.id, mode=_get_nginx_mode(app),
         )
         ok, _ = nm.write_nginx_config(app.name, config)
         app.nginx_enabled = ok
@@ -499,7 +545,11 @@ async def get_nginx_config(app_id: int, db: AsyncSession = Depends(get_db)):
     if not os.path.exists(config_path):
         generated = None
         if app.domain and app.port:
-            generated = nm.generate_config(app.name, app.domain, app.port, app.ssl_cert_path, app.ssl_key_path)
+            generated = nm.generate_config(
+                app.name, app.domain, app.port,
+                app.ssl_cert_path, app.ssl_key_path,
+                app_id=app.id, mode=_get_nginx_mode(app),
+            )
         return {"exists": False, "path": config_path, "content": generated, "active": False}
     with open(config_path) as f:
         content = f.read()
@@ -551,9 +601,105 @@ def _app_to_dict(app: Application) -> dict:
         "nginx_enabled": app.nginx_enabled,
         "auto_start":     app.auto_start,
         "restart_policy": app.restart_policy or "no",
+        "maintenance_mode": app.maintenance_mode or False,
+        "update_mode":      app.update_mode or False,
+        "downtime_page":    json.loads(app.downtime_page or "{}"),
+        "update_page":      json.loads(app.update_page   or "{}"),
         "ssl_cert_path": app.ssl_cert_path,
         "ssl_key_path": app.ssl_key_path,
         "github_token": "***" if app.github_token else None,
         "created_at": app.created_at.isoformat() if app.created_at else None,
         "updated_at": app.updated_at.isoformat() if app.updated_at else None,
     }
+
+
+# ── Maintenance page endpoints ─────────────────────────────────────────────
+
+@router.get("/{app_id}/maintenance-pages")
+async def get_maintenance_pages(app_id: int, db: AsyncSession = Depends(get_db)):
+    app = await _get_or_404(app_id, db)
+    return {
+        "maintenance_mode": app.maintenance_mode or False,
+        "update_mode":      app.update_mode or False,
+        "downtime_page":    json.loads(app.downtime_page or "{}"),
+        "update_page":      json.loads(app.update_page   or "{}"),
+    }
+
+
+@router.put("/{app_id}/maintenance-pages")
+async def save_maintenance_pages(
+    app_id: int,
+    req: MaintenanceSettings,
+    db: AsyncSession = Depends(get_db),
+):
+    app = await _get_or_404(app_id, db)
+    app.downtime_page = json.dumps(req.downtime_page.model_dump())
+    app.update_page   = json.dumps(req.update_page.model_dump())
+
+    downtime_html = nm.generate_maintenance_html(
+        req.downtime_page.title   or "Down for Maintenance",
+        req.downtime_page.message or "We'll be back shortly.",
+        req.downtime_page.color   or "#f85149",
+        req.downtime_page.custom_html,
+        "downtime",
+    )
+    update_html = nm.generate_maintenance_html(
+        req.update_page.title   or "Updating\u2026",
+        req.update_page.message or "We\u2019re deploying a new version. Check back soon.",
+        req.update_page.color   or "#f0883e",
+        req.update_page.custom_html,
+        "update",
+    )
+    ok, msg = nm.write_maintenance_files(app_id, downtime_html, update_html)
+    await db.commit()
+    return {"ok": ok, "message": "Saved" if ok else msg}
+
+
+@router.post("/{app_id}/maintenance-mode/toggle")
+async def toggle_maintenance_mode(app_id: int, db: AsyncSession = Depends(get_db)):
+    app = await _get_or_404(app_id, db)
+    if not app.nginx_enabled or not app.domain:
+        raise HTTPException(400, "Nginx must be configured to use maintenance mode")
+
+    app.maintenance_mode = not (app.maintenance_mode or False)
+    if app.maintenance_mode:
+        app.update_mode = False  # mutex: only one mode at a time
+
+    _ensure_maintenance_files(app, app_id)
+    mode   = _get_nginx_mode(app)
+    config = nm.generate_config(
+        app.name, app.domain, app.port,
+        app.ssl_cert_path, app.ssl_key_path,
+        app_id=app_id, mode=mode,
+    )
+    ok, msg = nm.write_nginx_config(app.name, config)
+    if not ok:
+        raise HTTPException(500, f"Nginx config failed: {msg}")
+
+    await db.commit()
+    return _app_to_dict(app)
+
+
+@router.post("/{app_id}/update-mode/toggle")
+async def toggle_update_mode(app_id: int, db: AsyncSession = Depends(get_db)):
+    app = await _get_or_404(app_id, db)
+    if not app.nginx_enabled or not app.domain:
+        raise HTTPException(400, "Nginx must be configured to use update mode")
+
+    app.update_mode = not (app.update_mode or False)
+    if app.update_mode:
+        app.maintenance_mode = False  # mutex: only one mode at a time
+
+    _ensure_maintenance_files(app, app_id)
+    mode   = _get_nginx_mode(app)
+    config = nm.generate_config(
+        app.name, app.domain, app.port,
+        app.ssl_cert_path, app.ssl_key_path,
+        app_id=app_id, mode=mode,
+    )
+    ok, msg = nm.write_nginx_config(app.name, config)
+    if not ok:
+        raise HTTPException(500, f"Nginx config failed: {msg}")
+
+    await db.commit()
+    return _app_to_dict(app)

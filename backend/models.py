@@ -23,5 +23,9 @@ class Application(Base):
     nginx_enabled  = Column(Boolean, default=False)
     auto_start     = Column(Boolean, default=False)
     restart_policy = Column(String(20), default="no")   # no | always | on-failure
+    maintenance_mode = Column(Boolean, default=False)
+    update_mode      = Column(Boolean, default=False)
+    downtime_page    = Column(Text, nullable=True)  # JSON: {title, message, color, custom_html}
+    update_page      = Column(Text, nullable=True)  # JSON: {title, message, color, custom_html}
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
