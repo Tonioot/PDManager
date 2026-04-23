@@ -24,7 +24,10 @@ async def init_db():
     from models import Application
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
-        # Migrate existing DBs: add columns introduced after initial schema
+        # Migrate existing DBs: add columns introduced after initial schema.
+        result = await conn.exec_driver_sql("PRAGMA table_info(applications)")
+        existing_columns = {row[1] for row in result.fetchall()}
+
         for col, definition in [
             ("auto_start",       "BOOLEAN NOT NULL DEFAULT 0"),
             ("restart_policy",   "VARCHAR(20) NOT NULL DEFAULT 'no'"),
@@ -32,10 +35,10 @@ async def init_db():
             ("update_mode",      "BOOLEAN NOT NULL DEFAULT 0"),
             ("downtime_page",    "TEXT"),
             ("update_page",      "TEXT"),
+            ("restart_page",     "TEXT"),
         ]:
-            try:
-                await conn.exec_driver_sql(
-                    f"ALTER TABLE applications ADD COLUMN {col} {definition}"
-                )
-            except Exception:
-                pass  # column already exists
+            if col in existing_columns:
+                continue
+            await conn.exec_driver_sql(
+                f"ALTER TABLE applications ADD COLUMN {col} {definition}"
+            )
