@@ -115,7 +115,7 @@ WorkingDirectory=$SCRIPT_DIR
 ExecStart=/bin/bash $START_SH
 Restart=on-failure
 RestartSec=5
-KillMode=process
+KillMode=none
 TimeoutStopSec=15
 Delegate=yes
 

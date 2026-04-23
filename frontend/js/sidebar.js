@@ -220,7 +220,7 @@ async function initSessionTimer() {
     remaining = data.expires_in;
   } catch { return; }
 
-  const total = remaining;
+  const total = 3600; // fixed token lifetime — percentage relative to full session
 
   function tick() {
     if (remaining <= 0) {
