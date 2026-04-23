@@ -20,57 +20,218 @@ def generate_maintenance_html(
     if custom_html:
         return custom_html
 
-    icon_char = "🔧" if page_type == "downtime" else "🚀"
-    safe_title   = title.replace("<", "&lt;").replace(">", "&gt;")
-    safe_message = message.replace("<", "&lt;").replace(">", "&gt;")
+    safe_title   = title.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+    safe_message = message.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
     safe_color   = color if color.startswith("#") and len(color) in (4, 7) else "#f85149"
 
+    if page_type == "downtime":
+        return _downtime_template(safe_title, safe_message, safe_color)
+    return _update_template(safe_title, safe_message, safe_color)
+
+
+def _downtime_template(title: str, message: str, color: str) -> str:
     return f"""<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>{safe_title}</title>
+  <title>{title}</title>
   <style>
-    * {{ box-sizing: border-box; margin: 0; padding: 0; }}
+    *, *::before, *::after {{ box-sizing: border-box; margin: 0; padding: 0; }}
     body {{
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-      background: #0d1117;
-      color: #e6edf3;
+      font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', sans-serif;
+      background: #070c18;
+      color: #e2e8f0;
       min-height: 100vh;
       display: flex;
+      flex-direction: column;
       align-items: center;
       justify-content: center;
+      padding: 40px 24px;
+    }}
+    .card {{
+      background: #0f172a;
+      border: 1px solid #1e2d40;
+      border-radius: 20px;
+      padding: 52px 56px;
+      max-width: 560px;
+      width: 100%;
       text-align: center;
-      padding: 24px;
+      box-shadow: 0 25px 80px rgba(0,0,0,0.65), 0 0 0 1px rgba(255,255,255,0.03);
     }}
-    .container {{ max-width: 520px; }}
-    .icon {{ font-size: 64px; margin-bottom: 28px; animation: pulse 2.5s ease-in-out infinite; }}
-    @keyframes pulse {{
-      0%, 100% {{ opacity: 1; transform: scale(1); }}
-      50%       {{ opacity: 0.65; transform: scale(0.93); }}
+    .status-pill {{
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: rgba(248,81,73,0.12);
+      border: 1px solid rgba(248,81,73,0.25);
+      border-radius: 100px;
+      padding: 7px 18px;
+      margin-bottom: 36px;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: {color};
     }}
-    h1 {{ font-size: 28px; font-weight: 700; color: {safe_color}; margin-bottom: 14px; }}
-    p  {{ font-size: 16px; color: #8b949e; line-height: 1.7; }}
-    .dots {{ margin-top: 36px; }}
-    .dot {{
-      display: inline-block; width: 8px; height: 8px;
-      background: {safe_color}; border-radius: 50%;
-      animation: blink 1.4s ease-in-out infinite;
+    .pulse-dot {{
+      width: 7px; height: 7px; border-radius: 50%;
+      background: {color};
+      animation: pulse 2s ease-in-out infinite;
     }}
-    .dot:nth-child(2) {{ animation-delay: 0.2s; margin: 0 7px; }}
-    .dot:nth-child(3) {{ animation-delay: 0.4s; }}
-    @keyframes blink {{ 0%, 80%, 100% {{ opacity: 0.1; }} 40% {{ opacity: 1; }} }}
+    @keyframes pulse {{ 0%, 100% {{ opacity: 1; }} 50% {{ opacity: 0.25; }} }}
+    h1 {{
+      font-size: 30px; font-weight: 700;
+      color: #f8fafc; margin-bottom: 16px;
+      letter-spacing: -0.025em; line-height: 1.2;
+    }}
+    .msg {{
+      font-size: 15px; color: #64748b;
+      line-height: 1.8; margin-bottom: 40px;
+    }}
+    hr {{ border: none; border-top: 1px solid #1e2d40; margin-bottom: 28px; }}
+    .footer {{ font-size: 12px; color: #2d3f55; line-height: 1.6; }}
+    .dots {{
+      display: flex; gap: 6px;
+      justify-content: center; margin-top: 36px;
+    }}
+    .dots span {{
+      width: 6px; height: 6px; border-radius: 50%;
+      background: #1e2d40;
+      animation: dot 1.4s ease-in-out infinite;
+    }}
+    .dots span:nth-child(2) {{ animation-delay: 0.2s; }}
+    .dots span:nth-child(3) {{ animation-delay: 0.4s; }}
+    @keyframes dot {{
+      0%, 80%, 100% {{ background: #1e2d40; transform: scale(0.8); }}
+      40% {{ background: {color}; transform: scale(1.2); }}
+    }}
   </style>
 </head>
 <body>
-  <div class="container">
-    <div class="icon">{icon_char}</div>
-    <h1>{safe_title}</h1>
-    <p>{safe_message}</p>
-    <div class="dots">
-      <span class="dot"></span><span class="dot"></span><span class="dot"></span>
+  <div class="card">
+    <div class="status-pill">
+      <span class="pulse-dot"></span>
+      Service Unavailable
     </div>
+    <h1>{title}</h1>
+    <p class="msg">{message}</p>
+    <hr>
+    <div class="footer">
+      We're working on restoring the service.<br>This page will reflect the latest status.
+    </div>
+    <div class="dots">
+      <span></span><span></span><span></span>
+    </div>
+  </div>
+</body>
+</html>
+"""
+
+
+def _update_template(title: str, message: str, color: str) -> str:
+    return f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="refresh" content="30">
+  <title>{title}</title>
+  <style>
+    *, *::before, *::after {{ box-sizing: border-box; margin: 0; padding: 0; }}
+    body {{
+      font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', sans-serif;
+      background: #070c18;
+      color: #e2e8f0;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 40px 24px;
+    }}
+    .card {{
+      background: #0f172a;
+      border: 1px solid #1e2d40;
+      border-radius: 20px;
+      padding: 52px 56px;
+      max-width: 560px;
+      width: 100%;
+      text-align: center;
+      box-shadow: 0 25px 80px rgba(0,0,0,0.65), 0 0 0 1px rgba(255,255,255,0.03);
+    }}
+    .rocket {{
+      font-size: 56px;
+      display: block;
+      margin-bottom: 32px;
+      animation: float 3.5s ease-in-out infinite;
+    }}
+    @keyframes float {{
+      0%, 100% {{ transform: translateY(0) rotate(-5deg); }}
+      50% {{ transform: translateY(-14px) rotate(5deg); }}
+    }}
+    .status-pill {{
+      display: inline-flex;
+      align-items: center;
+      gap: 9px;
+      background: rgba(240,136,62,0.12);
+      border: 1px solid rgba(240,136,62,0.25);
+      border-radius: 100px;
+      padding: 7px 18px;
+      margin-bottom: 36px;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: {color};
+    }}
+    .spinner {{
+      width: 11px; height: 11px; border-radius: 50%;
+      border: 2px solid rgba(240,136,62,0.25);
+      border-top-color: {color};
+      animation: spin 0.75s linear infinite;
+    }}
+    @keyframes spin {{ to {{ transform: rotate(360deg); }} }}
+    h1 {{
+      font-size: 30px; font-weight: 700;
+      color: #f8fafc; margin-bottom: 16px;
+      letter-spacing: -0.025em; line-height: 1.2;
+    }}
+    .msg {{
+      font-size: 15px; color: #64748b;
+      line-height: 1.8; margin-bottom: 40px;
+    }}
+    .progress {{
+      background: #1e2d40;
+      border-radius: 100px;
+      height: 3px;
+      overflow: hidden;
+      margin-bottom: 32px;
+    }}
+    .progress-bar {{
+      height: 100%;
+      background: linear-gradient(90deg, transparent, {color}, transparent);
+      border-radius: 100px;
+      animation: sweep 2s ease-in-out infinite;
+    }}
+    @keyframes sweep {{
+      0%   {{ width: 40%; margin-left: -40%; }}
+      100% {{ width: 40%; margin-left: 100%; }}
+    }}
+    .footer {{ font-size: 12px; color: #2d3f55; }}
+  </style>
+</head>
+<body>
+  <div class="card">
+    <span class="rocket">🚀</span>
+    <div class="status-pill">
+      <span class="spinner"></span>
+      Deploying Update
+    </div>
+    <h1>{title}</h1>
+    <p class="msg">{message}</p>
+    <div class="progress"><div class="progress-bar"></div></div>
+    <div class="footer">Page refreshes automatically every 30 seconds.</div>
   </div>
 </body>
 </html>
@@ -132,14 +293,15 @@ def generate_config(
 
 
 def _proxy_config(domain: str, port: int, maint_root: str, ssl_cert: str = None, ssl_key: str = None) -> str:
-    proxy_location = f"""\
-    proxy_intercept_errors on;
+    # NOTE: proxy_intercept_errors must be inside the proxying location block.
+    # Named locations cannot use try_files — use rewrite instead.
+    server_content = f"""\
+    # Auto-serve downtime page when upstream returns 502/503/504
     error_page 502 503 504 @maintenance;
-
     location @maintenance {{
         root {maint_root};
-        try_files /downtime.html =502;
-        internal;
+        rewrite ^ /downtime.html break;
+        default_type text/html;
     }}
 
     location / {{
@@ -152,6 +314,7 @@ def _proxy_config(domain: str, port: int, maint_root: str, ssl_cert: str = None,
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
         proxy_cache_bypass $http_upgrade;
+        proxy_intercept_errors on;
     }}"""
 
     if ssl_cert and ssl_key:
@@ -170,23 +333,26 @@ server {{
     ssl_protocols TLSv1.2 TLSv1.3;
     ssl_ciphers HIGH:!aNULL:!MD5;
 
-{proxy_location}
+{server_content}
 }}
 """
     return f"""server {{
     listen 80;
     server_name {domain};
 
-{proxy_location}
+{server_content}
 }}
 """
 
 
 def _static_page_config(domain: str, maint_root: str, filename: str, ssl_cert: str = None, ssl_key: str = None) -> str:
-    location = f"""\
+    # Serve a single static HTML file — works even when both app and PDManager are offline.
+    server_content = f"""\
+    root {maint_root};
+
     location / {{
-        root {maint_root};
         try_files /{filename} =503;
+        default_type text/html;
     }}"""
 
     if ssl_cert and ssl_key:
@@ -205,14 +371,14 @@ server {{
     ssl_protocols TLSv1.2 TLSv1.3;
     ssl_ciphers HIGH:!aNULL:!MD5;
 
-{location}
+{server_content}
 }}
 """
     return f"""server {{
     listen 80;
     server_name {domain};
 
-{location}
+{server_content}
 }}
 """
 

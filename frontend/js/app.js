@@ -114,6 +114,7 @@ async function toggleMode(type) {
     const fn = type === 'maintenance' ? api.toggleMaintenanceMode : api.toggleUpdateMode;
     app = await fn(APP_ID);
     updateHeaderStatus();
+    _updateMaintBadges();
     const isOn = type === 'maintenance' ? app.maintenance_mode : app.update_mode;
     toast(isOn ? `${type === 'maintenance' ? 'Maintenance' : 'Update'} mode enabled`
                : `${type === 'maintenance' ? 'Maintenance' : 'Update'} mode disabled`);
@@ -619,13 +620,11 @@ function initSettings() {
 /* ─── Maintenance pages settings ────────────────────────────────────────── */
 function initMaintenanceSettings() {
   const hasNginx = !!app.nginx_enabled;
-  const section  = document.getElementById('maintenance-pages-section');
-  const hint     = document.getElementById('maint-nginx-hint');
-
-  // Show/hide the "requires nginx" hint
-  hint.style.display = hasNginx ? 'none' : '';
+  const noNginxWarn = document.getElementById('maint-no-nginx-warn');
+  if (noNginxWarn) noNginxWarn.style.display = hasNginx ? 'none' : '';
 
   // Disable all inputs when nginx not configured
+  const section = document.getElementById('maintenance-pages-section');
   section.querySelectorAll('input, textarea, button, select').forEach(el => {
     el.disabled = !hasNginx;
   });
@@ -647,6 +646,9 @@ function initMaintenanceSettings() {
     custom_html: up.custom_html || '',
   });
 
+  // Status badges
+  _updateMaintBadges();
+
   if (!hasNginx) return;
 
   // Color picker ↔ hex input sync
@@ -664,9 +666,32 @@ function initMaintenanceSettings() {
     });
   }
 
+  // Preview buttons — open rendered page in new tab
+  document.getElementById('btn-preview-downtime').addEventListener('click', () => {
+    window.open(`/api/apps/${APP_ID}/maintenance-pages/preview/downtime`, '_blank');
+  });
+  document.getElementById('btn-preview-update').addEventListener('click', () => {
+    window.open(`/api/apps/${APP_ID}/maintenance-pages/preview/update`, '_blank');
+  });
+
   // Save buttons
   document.getElementById('btn-save-downtime').addEventListener('click', () => saveMaintenancePage('downtime'));
   document.getElementById('btn-save-update').addEventListener('click',   () => saveMaintenancePage('update'));
+}
+
+function _updateMaintBadges() {
+  const downtimeBadge = document.getElementById('maint-downtime-badge');
+  const updateBadge   = document.getElementById('maint-update-badge');
+  if (!downtimeBadge || !updateBadge) return;
+
+  const isMaint  = !!app.maintenance_mode;
+  const isUpdate = !!app.update_mode;
+
+  downtimeBadge.textContent = isMaint  ? 'Active' : 'Inactive';
+  downtimeBadge.className   = `maint-mode-badge ${isMaint  ? 'maint-badge--red'    : 'maint-badge--off'}`;
+
+  updateBadge.textContent   = isUpdate ? 'Active' : 'Inactive';
+  updateBadge.className     = `maint-mode-badge ${isUpdate ? 'maint-badge--orange' : 'maint-badge--off'}`;
 }
 
 function _fillMaintenanceCard(type, cfg) {
@@ -712,6 +737,7 @@ async function saveMaintenancePage(type) {
     if (res.ok) {
       // Refresh local app state so the other card isn't overwritten on next open
       app = await api.getApp(APP_ID);
+      _updateMaintBadges();
       toast(`${type === 'downtime' ? 'Downtime' : 'Update'} page saved`);
     } else {
       toast(res.message || 'Save failed', 'error');

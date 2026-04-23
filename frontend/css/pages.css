@@ -464,42 +464,159 @@
 .settings-section.danger { border-color: var(--red-border); }
 .settings-section .section-title.danger { color: var(--red); }
 
-/* ─── Maintenance pages grid ────────────────────────────────────────────── */
-.maintenance-grid {
+/* ─── Maintenance pages section ─────────────────────────────────────────── */
+.maint-section {
+  margin-bottom: 20px;
+}
+
+.maint-section-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.maint-section-title {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.maint-no-nginx-warn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  color: var(--yellow);
+  background: var(--yellow-bg);
+  border: 1px solid var(--yellow-border);
+  border-radius: 20px;
+  padding: 3px 10px;
+}
+
+.maint-how-it-works {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  background: var(--accent-bg);
+  border: 1px solid var(--accent-border);
+  border-radius: var(--radius-sm);
+  padding: 10px 14px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  line-height: 1.6;
+  margin-bottom: 14px;
+}
+.maint-how-it-works svg { flex-shrink: 0; margin-top: 1px; color: var(--accent); }
+.maint-how-it-works strong { color: var(--text-primary); }
+.maint-how-it-works em { font-style: normal; color: var(--text-primary); }
+
+.maint-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 16px;
-  margin-top: 16px;
+  gap: 14px;
   align-items: start;
 }
 
-.maintenance-card {
-  background: var(--bg-elevated);
+/* ── Individual maintenance card ── */
+.maint-card {
+  background: var(--bg-surface);
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  padding: 16px;
   display: flex;
   flex-direction: column;
-  gap: 0;
+  overflow: hidden;
 }
 
-.maintenance-card-head {
-  margin-bottom: 14px;
+.maint-card--down  { border-top: 3px solid var(--red-border); }
+.maint-card--update { border-top: 3px solid rgba(255,166,87,0.35); }
+
+.maint-card-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 16px 18px 12px;
+  border-bottom: 1px solid var(--border-muted);
 }
 
-.maintenance-card-label {
-  display: block;
+.maint-card-identity {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.maint-card-icon {
+  width: 30px; height: 30px;
+  border-radius: 8px;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+}
+.maint-card-icon--red    { background: var(--red-bg);    color: var(--red);    border: 1px solid var(--red-border); }
+.maint-card-icon--orange { background: var(--orange-bg); color: var(--orange); border: 1px solid rgba(255,166,87,0.3); }
+
+.maint-card-name {
   font-size: 13px;
   font-weight: 600;
   color: var(--text-primary);
   margin-bottom: 3px;
 }
 
-.maintenance-card-sub {
-  display: block;
+.maint-card-desc {
   font-size: 11px;
   color: var(--text-muted);
   line-height: 1.5;
+  max-width: 220px;
+}
+.maint-card-desc strong { color: var(--text-secondary); }
+
+/* Status badge on each card */
+.maint-mode-badge {
+  display: inline-flex; align-items: center;
+  border-radius: 20px;
+  padding: 3px 9px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.maint-badge--off    { background: var(--bg-muted); color: var(--text-muted); border: 1px solid var(--border); }
+.maint-badge--red    { background: var(--red-bg);   color: var(--red);   border: 1px solid var(--red-border); }
+.maint-badge--orange { background: var(--orange-bg); color: var(--orange); border: 1px solid rgba(255,166,87,0.3); }
+
+.maint-card-fields {
+  padding: 14px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.maint-color-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.maint-color-swatch {
+  width: 34px; height: 34px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: none;
+  cursor: pointer;
+  padding: 3px;
+  flex-shrink: 0;
+}
+
+.maint-card-footer {
+  display: flex;
+  gap: 8px;
+  padding: 12px 18px;
+  border-top: 1px solid var(--border-muted);
+  background: var(--bg-elevated);
 }
 
 .info-row {

@@ -703,3 +703,38 @@ async def toggle_update_mode(app_id: int, db: AsyncSession = Depends(get_db)):
 
     await db.commit()
     return _app_to_dict(app)
+
+
+@router.get("/{app_id}/maintenance-pages/preview/{page_type}")
+async def preview_maintenance_page(
+    app_id: int,
+    page_type: str,
+    db: AsyncSession = Depends(get_db),
+):
+    """Return the rendered HTML for a maintenance page — opens directly in the browser."""
+    from fastapi.responses import HTMLResponse
+
+    if page_type not in ("downtime", "update"):
+        raise HTTPException(400, "page_type must be 'downtime' or 'update'")
+
+    app = await _get_or_404(app_id, db)
+    raw = app.downtime_page if page_type == "downtime" else (app.update_page or "{}")
+    cfg = json.loads(raw or "{}")
+
+    if page_type == "downtime":
+        html = nm.generate_maintenance_html(
+            cfg.get("title")   or "Down for Maintenance",
+            cfg.get("message") or "We'll be back shortly.",
+            cfg.get("color")   or "#f85149",
+            cfg.get("custom_html"),
+            "downtime",
+        )
+    else:
+        html = nm.generate_maintenance_html(
+            cfg.get("title")   or "Updating\u2026",
+            cfg.get("message") or "We\u2019re deploying a new version. Check back soon.",
+            cfg.get("color")   or "#f0883e",
+            cfg.get("custom_html"),
+            "update",
+        )
+    return HTMLResponse(content=html)
