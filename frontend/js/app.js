@@ -1,5 +1,6 @@
 import { api, wsLogs, wsStats } from './api.js';
 import { icon, typeIcon, badge, toast, confirm, spinner, fmtUptime, fmtSize, fmtDate, logClass, setBtn } from './utils.js';
+import { pickGitHubToken } from './sidebar.js';
 
 const params = new URLSearchParams(location.search);
 const APP_ID = parseInt(params.get('id'));
@@ -502,6 +503,11 @@ function initSettings() {
   Object.entries(app.env_vars || {}).forEach(([k, v]) => addEnvRow(envContainer, k, v));
 
   document.getElementById('cfg-add-env').addEventListener('click', () => addEnvRow(envContainer, '', ''));
+
+  // Pick saved GitHub token
+  document.getElementById('cfg-token-pick').addEventListener('click', () => {
+    pickGitHubToken(document.getElementById('cfg-token'));
+  });
 
   // Save
   document.getElementById('btn-save').addEventListener('click', saveSettings);
