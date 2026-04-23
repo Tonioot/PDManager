@@ -619,7 +619,8 @@ function initSettings() {
 }
 
 /* ─── Maintenance pages settings ────────────────────────────────────────── */
-let _maintModalType = 'downtime'; // currently open card typelet _maintLogoData  = null;       // base64 data-URL or null (no logo)
+let _maintModalType = 'downtime'; // currently open card type
+let _maintLogoData  = null;       // base64 data-URL or null (no logo)
 function initMaintenanceSettings() {
   const hasNginx = !!app.nginx_enabled;
   const noNginxWarn = document.getElementById('maint-no-nginx-warn');
@@ -628,6 +629,7 @@ function initMaintenanceSettings() {
   // Disable open buttons when nginx not configured
   document.getElementById('btn-open-downtime-modal').disabled = !hasNginx;
   document.getElementById('btn-open-update-modal').disabled   = !hasNginx;
+  document.getElementById('btn-open-restart-modal').disabled  = !hasNginx;
 
   // Status badges
   _updateMaintBadges();
@@ -637,22 +639,29 @@ function initMaintenanceSettings() {
   // Wire open buttons
   document.getElementById('btn-open-downtime-modal').addEventListener('click', () => openMaintModal('downtime'));
   document.getElementById('btn-open-update-modal').addEventListener('click',   () => openMaintModal('update'));
+  document.getElementById('btn-open-restart-modal').addEventListener('click',  () => openMaintModal('restart'));
 }
 
 function openMaintModal(type) {
   _maintModalType = type;
-  const cfg  = (type === 'downtime' ? app.downtime_page : app.update_page) || {};
-  const isDown = type === 'downtime';
+  let cfg;
+  if (type === 'downtime')      cfg = app.downtime_page || {};
+  else if (type === 'restart')  cfg = app.restart_page  || {};
+  else                          cfg = app.update_page   || {};
+  const isDown    = type === 'downtime';
+  const isRestart = type === 'restart';
 
   const backdrop = document.getElementById('maint-modal-backdrop');
   backdrop.style.display = '';
 
-  document.getElementById('maint-modal-title').textContent = isDown ? 'Downtime Page' : 'Update Page';
+  document.getElementById('maint-modal-title').textContent = isDown ? 'Downtime Page' : isRestart ? 'Restart Page' : 'Update Page';
   document.getElementById('maint-modal-sub').textContent   = isDown
     ? 'Shown automatically on 502/503 (crash or stop) and when Maintenance mode is on'
+    : isRestart
+    ? 'Shown automatically whenever the Restart button is pressed — clears when the app is back up'
     : 'Shown when Update Mode is manually enabled — ideal for planned deployments';
 
-  const color = cfg.color || (isDown ? '#f85149' : '#f0883e');
+  const color = cfg.color || (isDown ? '#f85149' : isRestart ? '#388bfd' : '#f0883e');
   document.getElementById('maint-modal-title-input').value  = cfg.title   || '';
   document.getElementById('maint-modal-message').value      = cfg.message || '';
   document.getElementById('maint-modal-status-url').value   = cfg.status_url || '';
@@ -737,6 +746,7 @@ function _initMaintModal() {
 function _updateMaintBadges() {
   const downtimeBadge = document.getElementById('maint-downtime-badge');
   const updateBadge   = document.getElementById('maint-update-badge');
+  const restartBadge  = document.getElementById('maint-restart-badge');
   if (!downtimeBadge || !updateBadge) return;
 
   const isMaint  = !!app.maintenance_mode;
@@ -747,6 +757,11 @@ function _updateMaintBadges() {
 
   updateBadge.textContent   = isUpdate ? 'On' : 'Off';
   updateBadge.className     = `maint-row-badge ${isUpdate ? 'maint-badge--orange' : 'maint-badge--off'}`;
+
+  if (restartBadge) {
+    restartBadge.textContent = 'Auto';
+    restartBadge.className   = 'maint-row-badge maint-badge--blue';
+  }
 }
 
 async function saveMaintenancePage(type) {
@@ -788,9 +803,11 @@ async function saveMaintenancePage(type) {
   // Build full settings payload (preserve the other page's existing data)
   const currentDt = app.downtime_page || {};
   const currentUp = app.update_page   || {};
+  const currentRe = app.restart_page  || {};
   const payload = {
     downtime_page: type === 'downtime' ? pageData : { title: currentDt.title, message: currentDt.message, color: currentDt.color, status_url: currentDt.status_url, custom_html: currentDt.custom_html, logo_data: currentDt.logo_data },
     update_page:   type === 'update'   ? pageData : { title: currentUp.title, message: currentUp.message, color: currentUp.color, status_url: currentUp.status_url, custom_html: currentUp.custom_html, logo_data: currentUp.logo_data },
+    restart_page:  type === 'restart'  ? pageData : { title: currentRe.title, message: currentRe.message, color: currentRe.color, status_url: currentRe.status_url, custom_html: currentRe.custom_html, logo_data: currentRe.logo_data },
   };
 
   try {
@@ -798,7 +815,7 @@ async function saveMaintenancePage(type) {
     if (res.ok) {
       app = await api.getApp(APP_ID);
       _updateMaintBadges();
-      toast(`${type === 'downtime' ? 'Downtime' : 'Update'} page saved`);
+      toast(`${type === 'downtime' ? 'Downtime' : type === 'restart' ? 'Restart' : 'Update'} page saved`);
       document.getElementById('maint-modal-backdrop').style.display = 'none';
     } else {
       toast(res.message || 'Save failed', 'error');

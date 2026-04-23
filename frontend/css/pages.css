@@ -527,8 +527,10 @@
 }
 .maint-row-btn--red    { border-color: var(--red-border) !important; color: var(--red) !important; }
 .maint-row-btn--orange { border-color: rgba(255,166,87,0.3) !important; color: var(--orange) !important; }
+.maint-row-btn--blue   { border-color: rgba(56,139,253,0.3) !important; color: #388bfd !important; }
 .maint-row-btn--red:hover    { background: var(--red-bg) !important; }
 .maint-row-btn--orange:hover { background: var(--orange-bg) !important; }
+.maint-row-btn--blue:hover   { background: rgba(56,139,253,0.08) !important; }
 
 /* Small status badge inside the row button */
 .maint-row-badge {
@@ -542,6 +544,7 @@
 .maint-badge--off    { background: var(--bg-muted); color: var(--text-muted); border: 1px solid var(--border); }
 .maint-badge--red    { background: var(--red-bg);   color: var(--red);   border: 1px solid var(--red-border); }
 .maint-badge--orange { background: var(--orange-bg); color: var(--orange); border: 1px solid rgba(255,166,87,0.3); }
+.maint-badge--blue   { background: rgba(56,139,253,0.1); color: #388bfd; border: 1px solid rgba(56,139,253,0.3); }
 
 /* Shared color swatch used in modal */
 .maint-color-row {

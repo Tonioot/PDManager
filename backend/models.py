@@ -27,5 +27,6 @@ class Application(Base):
     update_mode      = Column(Boolean, default=False)
     downtime_page    = Column(Text, nullable=True)  # JSON: {title, message, color, custom_html}
     update_page      = Column(Text, nullable=True)  # JSON: {title, message, color, custom_html}
+    restart_page     = Column(Text, nullable=True)  # JSON: {title, message, color, custom_html}
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
