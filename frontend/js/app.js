@@ -619,8 +619,7 @@ function initSettings() {
 }
 
 /* ─── Maintenance pages settings ────────────────────────────────────────── */
-let _maintModalType = 'downtime'; // currently open card type
-
+let _maintModalType = 'downtime'; // currently open card typelet _maintLogoData  = null;       // base64 data-URL or null (no logo)
 function initMaintenanceSettings() {
   const hasNginx = !!app.nginx_enabled;
   const noNginxWarn = document.getElementById('maint-no-nginx-warn');
@@ -660,6 +659,19 @@ function openMaintModal(type) {
   document.getElementById('maint-modal-color').value        = color;
   document.getElementById('maint-modal-color-picker').value = color;
 
+  // Logo
+  _maintLogoData = cfg.logo_data || null;
+  const logoPreview = document.getElementById('maint-modal-logo-preview');
+  const btnLogoClr  = document.getElementById('btn-maint-logo-clear');
+  if (_maintLogoData) {
+    document.getElementById('maint-modal-logo-img').src = _maintLogoData;
+    logoPreview.style.display = '';
+    btnLogoClr.style.display  = '';
+  } else {
+    logoPreview.style.display = 'none';
+    btnLogoClr.style.display  = 'none';
+  }
+
   const hasCustom = !!cfg.custom_html;
   document.getElementById('maint-modal-custom-toggle').checked     = hasCustom;
   document.getElementById('maint-modal-custom-wrap').style.display = hasCustom ? '' : 'none';
@@ -694,6 +706,30 @@ function _initMaintModal() {
     window.open(`/api/apps/${APP_ID}/maintenance-pages/preview/${_maintModalType}`, '_blank');
   });
 
+  // Logo upload
+  document.getElementById('btn-maint-logo-upload').addEventListener('click', () => {
+    document.getElementById('maint-modal-logo-file').click();
+  });
+  document.getElementById('maint-modal-logo-file').addEventListener('change', e => {
+    const file = e.target.files[0];
+    if (!file) return;
+    if (file.size > 512 * 1024) { toast('Logo must be under 512 KB', 'error'); return; }
+    const reader = new FileReader();
+    reader.onload = evt => {
+      _maintLogoData = evt.target.result;
+      document.getElementById('maint-modal-logo-img').src = _maintLogoData;
+      document.getElementById('maint-modal-logo-preview').style.display = '';
+      document.getElementById('btn-maint-logo-clear').style.display = '';
+    };
+    reader.readAsDataURL(file);
+    e.target.value = ''; // allow re-selecting same file
+  });
+  document.getElementById('btn-maint-logo-clear').addEventListener('click', () => {
+    _maintLogoData = null;
+    document.getElementById('maint-modal-logo-preview').style.display = 'none';
+    document.getElementById('btn-maint-logo-clear').style.display = 'none';
+  });
+
   // Save
   document.getElementById('maint-modal-save').addEventListener('click', () => saveMaintenancePage(_maintModalType));
 }
@@ -714,6 +750,23 @@ function _updateMaintBadges() {
 }
 
 async function saveMaintenancePage(type) {
+  // Required field validation (skip when custom HTML is used)
+  const isCustom = document.getElementById('maint-modal-custom-toggle')?.checked;
+  if (!isCustom) {
+    const titleVal = document.getElementById('maint-modal-title-input').value.trim();
+    const msgVal   = document.getElementById('maint-modal-message').value.trim();
+    if (!titleVal) {
+      document.getElementById('maint-modal-title-input').focus();
+      toast('Title is required', 'error');
+      return;
+    }
+    if (!msgVal) {
+      document.getElementById('maint-modal-message').focus();
+      toast('Message is required', 'error');
+      return;
+    }
+  }
+
   const btn  = document.getElementById('maint-modal-save');
   const prev = btn.innerHTML;
   btn.disabled = true;
@@ -726,6 +779,7 @@ async function saveMaintenancePage(type) {
     message:    getVal('maint-modal-message').trim()      || null,
     color:      getVal('maint-modal-color').trim()        || null,
     status_url: getVal('maint-modal-status-url').trim()   || null,
+    logo_data:  _maintLogoData,
     custom_html: document.getElementById('maint-modal-custom-toggle')?.checked
                    ? getVal('maint-modal-custom-html') || null
                    : null,
@@ -735,8 +789,8 @@ async function saveMaintenancePage(type) {
   const currentDt = app.downtime_page || {};
   const currentUp = app.update_page   || {};
   const payload = {
-    downtime_page: type === 'downtime' ? pageData : { title: currentDt.title, message: currentDt.message, color: currentDt.color, status_url: currentDt.status_url, custom_html: currentDt.custom_html },
-    update_page:   type === 'update'   ? pageData : { title: currentUp.title, message: currentUp.message, color: currentUp.color, status_url: currentUp.status_url, custom_html: currentUp.custom_html },
+    downtime_page: type === 'downtime' ? pageData : { title: currentDt.title, message: currentDt.message, color: currentDt.color, status_url: currentDt.status_url, custom_html: currentDt.custom_html, logo_data: currentDt.logo_data },
+    update_page:   type === 'update'   ? pageData : { title: currentUp.title, message: currentUp.message, color: currentUp.color, status_url: currentUp.status_url, custom_html: currentUp.custom_html, logo_data: currentUp.logo_data },
   };
 
   try {

@@ -48,11 +48,12 @@ class UpdateRequest(BaseModel):
 
 
 class MaintenancePageConfig(BaseModel):
-    title: str = ""
-    message: str = ""
-    color: str = "#f85149"
-    status_url: Optional[str] = None   # e.g. https://status.vexora.nl
+    title: Optional[str] = ""
+    message: Optional[str] = ""
+    color: Optional[str] = "#f85149"
+    status_url: Optional[str] = None
     custom_html: Optional[str] = None
+    logo_data: Optional[str] = None    # base64 data-URL for logo image
 
 
 class MaintenanceSettings(BaseModel):
@@ -82,6 +83,7 @@ def _ensure_maintenance_files(app: Application, app_id: int) -> None:
         downtime_cfg.get("status_url"),
         downtime_cfg.get("custom_html"),
         "downtime",
+        logo_data=downtime_cfg.get("logo_data"),
     )
     update_html = nm.generate_maintenance_html(
         update_cfg.get("title")         or "Updating\u2026",
@@ -90,6 +92,7 @@ def _ensure_maintenance_files(app: Application, app_id: int) -> None:
         update_cfg.get("status_url"),
         update_cfg.get("custom_html"),
         "update",
+        logo_data=update_cfg.get("logo_data"),
     )
     ok, msg = nm.write_maintenance_files(app_id, downtime_html, update_html)
     log.info("[ensure-files] write result ok=%s msg=%r", ok, msg)
@@ -652,6 +655,7 @@ async def save_maintenance_pages(
         req.downtime_page.status_url,
         req.downtime_page.custom_html,
         "downtime",
+        logo_data=req.downtime_page.logo_data,
     )
     update_html = nm.generate_maintenance_html(
         req.update_page.title   or "Updating\u2026",
@@ -660,6 +664,7 @@ async def save_maintenance_pages(
         req.update_page.status_url,
         req.update_page.custom_html,
         "update",
+        logo_data=req.update_page.logo_data,
     )
     ok, msg = nm.write_maintenance_files(app_id, downtime_html, update_html)
     if not ok:
@@ -765,6 +770,7 @@ async def preview_maintenance_page(
             cfg.get("status_url"),
             cfg.get("custom_html"),
             "downtime",
+            logo_data=cfg.get("logo_data"),
         )
     else:
         html = nm.generate_maintenance_html(
@@ -774,6 +780,7 @@ async def preview_maintenance_page(
             cfg.get("status_url"),
             cfg.get("custom_html"),
             "update",
+            logo_data=cfg.get("logo_data"),
         )
     return HTMLResponse(content=html)
 
