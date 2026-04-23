@@ -350,17 +350,30 @@ def start_app(app_id: int, app_name: str, command: str, working_dir: str, env_va
     log_file = open(log_path, "w")
 
     systemd_run = _systemd_run()
-    if systemd_run:
-        # Wrap in a transient systemd scope unit so the app lives in its own
+    use_systemd = False
+    if use_systemd:
+        # Quick probe: can we actually use systemd-run --user?
+        try:
+            result = subprocess.run(
+                [systemd_run, "--user", "--scope", "--collect", "--", "/bin/true"],
+                capture_output=True, timeout=5,
+            )
+            use_systemd = result.returncode == 0
+        except Exception:
+            use_systemd = False
+
+    if use_systemd:
+        # Wrap in a transient user-scope unit so the app lives in its own
         # cgroup and is NOT killed when the PDManager service stops.
+        # --user     : use the user's own systemd manager (no root/polkit needed)
+        # --scope    : transient scope, not a service
         # --collect  : auto-remove unit after exit
-        # --no-ask-password: never prompt interactively
         unit_name = f"pdm-app-{app_id}"
         cmd = [
             systemd_run,
+            "--user",
             "--scope",
             "--collect",
-            "--no-ask-password",
             f"--unit={unit_name}",
             "--",
             "/bin/sh", "-c", command,
