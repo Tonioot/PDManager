@@ -72,4 +72,5 @@ fi
 
 # 8. Start de applicatie
 echo -e "${GREEN}>>> Launching Uvicorn server on port $PORT...${RESET}"
-exec "$VENV_PATH/bin/uvicorn" main:app --host 0.0.0.0 --port "$PORT"
+exec "$VENV_PATH/bin/uvicorn" main:app --host 0.0.0.0 --port "$PORT" \
+  --timeout-graceful-shutdown 8

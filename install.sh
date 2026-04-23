@@ -116,6 +116,7 @@ ExecStart=/bin/bash $START_SH
 Restart=on-failure
 RestartSec=5
 KillMode=process
+TimeoutStopSec=15
 Delegate=yes
 
 [Install]
