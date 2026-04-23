@@ -404,6 +404,36 @@ def _safe_name(app_name: str) -> str:
     return re.sub(r'[^a-zA-Z0-9_-]', '_', app_name).lower()
 
 
+def write_maintenance_files(app_id: int, downtime_html: str, update_html: str) -> tuple[bool, str]:
+    """Write downtime.html and update.html to /var/www/pdmanager/maintenance/{app_id}/."""
+    app_dir = os.path.join(MAINTENANCE_DIR, str(app_id))
+    log.info("[maint-files] writing to %s", app_dir)
+    try:
+        r = subprocess.run(["sudo", "mkdir", "-p", app_dir], capture_output=True, text=True)
+        log.info("[maint-files] mkdir rc=%d stderr=%r", r.returncode, r.stderr)
+        if r.returncode != 0:
+            return False, r.stderr or "Failed to create maintenance directory"
+
+        for filename, content in [("downtime.html", downtime_html), ("update.html", update_html)]:
+            path = os.path.join(app_dir, filename)
+            r = subprocess.run(["sudo", "tee", path], input=content, text=True, capture_output=True)
+            log.info("[maint-files] tee %s rc=%d stderr=%r", path, r.returncode, r.stderr)
+            if r.returncode != 0:
+                return False, r.stderr or f"Failed to write {filename}"
+
+        r = subprocess.run(
+            ["sudo", "chmod", "644",
+             os.path.join(app_dir, "downtime.html"),
+             os.path.join(app_dir, "update.html")],
+            capture_output=True, text=True,
+        )
+        log.info("[maint-files] chmod rc=%d stderr=%r", r.returncode, r.stderr)
+        return True, "OK"
+    except Exception as exc:
+        log.exception("[maint-files] unexpected error: %s", exc)
+        return False, str(exc)
+
+
 def write_nginx_config(app_name: str, config: str) -> tuple[bool, str]:
     safe = _safe_name(app_name)
     config_path = os.path.join(NGINX_SITES_DIR, safe)
