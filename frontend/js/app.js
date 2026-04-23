@@ -69,7 +69,7 @@ function renderHeader() {
   document.getElementById('btn-update-mode').addEventListener('click',      () => toggleMode('update'));
 }
 
-function updateHeaderStatus() {
+function _updateHeaderStatus_legacy() {
   document.getElementById('app-badge').innerHTML = badge(app.status);
 
   const s = app.status;
@@ -103,7 +103,7 @@ function updateHeaderStatus() {
   }
 }
 
-async function toggleMode(type) {
+async function _toggleMode_legacy(type) {
   const btnId = type === 'maintenance' ? 'btn-maintenance-mode' : 'btn-update-mode';
   const btn = document.getElementById(btnId);
   const prev = btn.innerHTML;
@@ -700,7 +700,7 @@ function initMaintenanceSettings() {
   document.getElementById('btn-open-restart-modal').addEventListener('click',  () => openMaintModal('restart'));
 }
 
-function openMaintModal(type) {
+function _openMaintModal_legacy(type) {
   _maintModalType = type;
   let cfg;
   if (type === 'downtime')      cfg = app.downtime_page || {};
