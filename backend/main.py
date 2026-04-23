@@ -250,6 +250,17 @@ async def login(req: LoginRequest, request: Request, response: Response):
     return {"ok": True, "expires_in": auth.TOKEN_EXPIRE_SECONDS}
 
 
+@app.get("/api/auth/session")
+async def session_info(request: Request):
+    token = request.cookies.get(_COOKIE_NAME)
+    if not token:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    expires_in = auth.get_token_expires_in(token)
+    if expires_in is None:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    return {"expires_in": expires_in}
+
+
 @app.post("/api/auth/logout")
 async def logout(response: Response):
     response.delete_cookie(key=_COOKIE_NAME, path="/")
@@ -308,6 +319,73 @@ async def upload_system_cert(file: UploadFile = File(...)):
     with open(dest_path, "wb") as f:
         f.write(await file.read())
     return {"path": dest_path}
+
+
+# ── GitHub token vault ────────────────────────────────────────────────────────
+_TOKENS_FILE = os.path.expanduser("~/.pdmanager/github_tokens.json")
+
+
+def _load_tokens() -> list[dict]:
+    try:
+        with open(_TOKENS_FILE) as f:
+            return json.load(f)
+    except Exception:
+        return []
+
+
+def _save_tokens(tokens: list[dict]) -> None:
+    os.makedirs(os.path.dirname(_TOKENS_FILE), exist_ok=True)
+    with open(_TOKENS_FILE, "w") as f:
+        json.dump(tokens, f)
+    os.chmod(_TOKENS_FILE, 0o600)
+
+
+class SaveTokenRequest(BaseModel):
+    label: str
+    token: str
+
+
+@app.get("/api/system/github-tokens")
+async def list_github_tokens():
+    tokens = _load_tokens()
+    # Never return the raw token — only the label and id
+    return [{"id": t["id"], "label": t["label"], "token_hint": t["token"][-4:]} for t in tokens]
+
+
+@app.post("/api/system/github-tokens")
+async def save_github_token(req: SaveTokenRequest):
+    if not req.label.strip():
+        raise HTTPException(400, "Label is required")
+    if not req.token.strip():
+        raise HTTPException(400, "Token is required")
+    tokens = _load_tokens()
+    # Deduplicate by label (update if same label)
+    existing = next((t for t in tokens if t["label"] == req.label.strip()), None)
+    if existing:
+        existing["token"] = req.token.strip()
+    else:
+        import uuid
+        tokens.append({"id": str(uuid.uuid4()), "label": req.label.strip(), "token": req.token.strip()})
+    _save_tokens(tokens)
+    return {"ok": True}
+
+
+@app.delete("/api/system/github-tokens/{token_id}")
+async def delete_github_token(token_id: str):
+    tokens = _load_tokens()
+    tokens = [t for t in tokens if t["id"] != token_id]
+    _save_tokens(tokens)
+    return {"ok": True}
+
+
+@app.get("/api/system/github-tokens/{token_id}/value")
+async def get_github_token_value(token_id: str):
+    """Return the raw token value so the frontend can fill in a form field."""
+    tokens = _load_tokens()
+    t = next((t for t in tokens if t["id"] == token_id), None)
+    if not t:
+        raise HTTPException(404, "Token not found")
+    return {"token": t["token"]}
 
 
 # ── Routers ───────────────────────────────────────────────────────────────────

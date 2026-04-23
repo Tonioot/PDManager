@@ -85,6 +85,21 @@ def decode_token(token: str) -> bool:
         return False
 
 
+def get_token_expires_in(token: str) -> Optional[int]:
+    """Return seconds remaining until token expires, or None if invalid."""
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        if payload.get("sub") != "admin":
+            return None
+        exp = payload.get("exp")
+        if exp is None:
+            return None
+        remaining = int(exp - datetime.now(timezone.utc).timestamp())
+        return max(0, remaining)
+    except JWTError:
+        return None
+
+
 # ── Rate limiter (in-memory, per IP) ─────────────────────────────────────────
 _login_attempts: dict[str, list[float]] = defaultdict(list)
 MAX_ATTEMPTS = 10

@@ -343,3 +343,32 @@
   overflow: auto;
   color: #c9d1d9;
 }
+
+/* ─── Session timer bar ─────────────────────────────────────────────────── */
+.session-timer-bar {
+  padding: 8px 14px 10px;
+  border-top: 1px solid var(--border-muted);
+}
+
+.session-timer-label {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-bottom: 5px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.session-timer-track {
+  height: 3px;
+  background: var(--bg-muted);
+  border-radius: 99px;
+  overflow: hidden;
+}
+
+.session-timer-fill {
+  height: 100%;
+  background: var(--accent);
+  border-radius: 99px;
+  transition: width 1s linear, background 0.5s ease;
+}

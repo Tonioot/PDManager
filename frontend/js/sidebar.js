@@ -28,6 +28,8 @@ export function initSidebar() {
   setInterval(loadSidebarApps, 8000);
   wireServiceButton();
   wirePDManagerNginxButton();
+  initSessionTimer();
+  wireGitHubTokensButton();
 }
 
 async function loadSidebarApps() {
@@ -195,4 +197,190 @@ function wireServiceButton() {
       pre.textContent = `Error: ${e.message}`;
     }
   });
+}
+
+// ── Session timer ─────────────────────────────────────────────────────────────
+function fmtSeconds(s) {
+  if (s <= 0) return 'Expired';
+  const m = Math.floor(s / 60);
+  const sec = s % 60;
+  return `${m}:${String(sec).padStart(2, '0')}`;
+}
+
+async function initSessionTimer() {
+  const bar = document.getElementById('session-timer-bar');
+  if (!bar) return;
+
+  const fill  = bar.querySelector('.session-timer-fill');
+  const label = bar.querySelector('.session-timer-label');
+
+  let remaining = 3600; // fallback
+  try {
+    const data = await api.getSession();
+    remaining = data.expires_in;
+  } catch { return; }
+
+  const total = remaining;
+
+  function tick() {
+    if (remaining <= 0) {
+      label.textContent = 'Session expired — please log in again';
+      fill.style.width  = '0%';
+      fill.style.background = 'var(--red)';
+      return;
+    }
+
+    label.textContent = `Session: ${fmtSeconds(remaining)} remaining`;
+    const pct = Math.max(0, (remaining / total) * 100);
+    fill.style.width = `${pct}%`;
+
+    if (pct < 15) {
+      fill.style.background = 'var(--red)';
+    } else if (pct < 35) {
+      fill.style.background = 'var(--yellow)';
+    } else {
+      fill.style.background = 'var(--accent)';
+    }
+
+    remaining--;
+  }
+
+  tick();
+  setInterval(tick, 1000);
+}
+
+// ── GitHub token vault ────────────────────────────────────────────────────────
+function wireGitHubTokensButton() {
+  const btn = document.getElementById('btn-github-tokens');
+  if (!btn) return;
+
+  btn.addEventListener('click', () => openGitHubTokensModal());
+}
+
+function openGitHubTokensModal() {
+  let modal = document.getElementById('github-tokens-modal-global');
+  if (!modal) {
+    modal = document.createElement('div');
+    modal.id = 'github-tokens-modal-global';
+    modal.className = 'dialog-backdrop';
+    modal.innerHTML = `
+      <div class="dialog" style="max-width:480px;width:90%">
+        <div class="dialog-title">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" style="margin-right:6px;vertical-align:-2px"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0 0 24 12c0-6.63-5.37-12-12-12z"/></svg>
+          GitHub Tokens
+        </div>
+        <div class="dialog-body">
+          <p style="font-size:12px;color:var(--text-muted);margin:0 0 12px">
+            Save tokens here so you can quickly pick them when deploying apps.
+          </p>
+          <div id="gh-tokens-list" style="margin-bottom:12px"></div>
+          <div style="display:flex;gap:8px;margin-bottom:8px">
+            <input class="input" id="gh-token-label" placeholder="Label (e.g. my-org)" style="flex:1;min-width:0" />
+            <input class="input input-mono" id="gh-token-value" type="password" placeholder="ghp_..." style="flex:2;min-width:0" />
+          </div>
+          <div id="gh-token-err" style="display:none;color:var(--red);font-size:12px;margin-bottom:8px"></div>
+        </div>
+        <div class="dialog-actions">
+          <button class="btn btn-secondary" id="gh-tokens-close">Close</button>
+          <button class="btn btn-primary" id="gh-token-add">Save Token</button>
+        </div>
+      </div>`;
+    document.body.appendChild(modal);
+
+    modal.querySelector('#gh-tokens-close').onclick = () => { modal.style.display = 'none'; };
+    modal.addEventListener('click', e => { if (e.target === modal) modal.style.display = 'none'; });
+
+    modal.querySelector('#gh-token-add').addEventListener('click', async () => {
+      const label = modal.querySelector('#gh-token-label').value.trim();
+      const token = modal.querySelector('#gh-token-value').value.trim();
+      const err   = modal.querySelector('#gh-token-err');
+      err.style.display = 'none';
+      if (!label) { err.textContent = 'Label is required'; err.style.display = 'block'; return; }
+      if (!token) { err.textContent = 'Token is required'; err.style.display = 'block'; return; }
+      try {
+        await api.saveGitHubToken(label, token);
+        modal.querySelector('#gh-token-label').value = '';
+        modal.querySelector('#gh-token-value').value = '';
+        await renderTokenList(modal);
+        toast(`Token "${label}" saved`);
+      } catch (e) {
+        err.textContent = e.message;
+        err.style.display = 'block';
+      }
+    });
+  }
+
+  modal.style.display = 'flex';
+  renderTokenList(modal);
+}
+
+async function renderTokenList(modal) {
+  const list = modal.querySelector('#gh-tokens-list');
+  list.innerHTML = '<div style="color:var(--text-muted);font-size:12px">Loading…</div>';
+  try {
+    const tokens = await api.listGitHubTokens();
+    if (tokens.length === 0) {
+      list.innerHTML = '<div style="color:var(--text-muted);font-size:12px">No saved tokens yet.</div>';
+      return;
+    }
+    list.innerHTML = tokens.map(t => `
+      <div class="gh-token-row" data-id="${t.id}" style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--border-muted)">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" style="color:var(--text-muted);flex-shrink:0"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0 0 24 12c0-6.63-5.37-12-12-12z"/></svg>
+        <span style="flex:1;font-size:13px;font-weight:500">${t.label}</span>
+        <span style="font-size:11px;color:var(--text-muted);font-family:monospace">••••${t.token_hint}</span>
+        <button class="btn btn-danger btn-sm gh-token-delete" style="padding:3px 8px;font-size:11px">Delete</button>
+      </div>`).join('');
+
+    list.querySelectorAll('.gh-token-delete').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const id = btn.closest('[data-id]').dataset.id;
+        await api.deleteGitHubToken(id);
+        await renderTokenList(modal);
+        toast('Token deleted');
+      });
+    });
+  } catch (e) {
+    list.innerHTML = `<div style="color:var(--red);font-size:12px">${e.message}</div>`;
+  }
+}
+
+// Exported so the deploy modal can call it
+export async function pickGitHubToken(inputEl) {
+  let tokens = [];
+  try { tokens = await api.listGitHubTokens(); } catch { return; }
+  if (!tokens.length) { toast('No saved tokens — save one via the GitHub Tokens button', 'warn'); return; }
+
+  document.querySelectorAll('.gh-token-picker').forEach(p => p.remove());
+
+  const picker = document.createElement('div');
+  picker.className = 'gh-token-picker cert-picker';
+  picker.style.cssText = `position:absolute;z-index:9999;background:#161b22;border:1px solid #30363d;
+    border-radius:6px;max-height:200px;overflow-y:auto;min-width:260px;
+    box-shadow:0 8px 24px rgba(0,0,0,.5);font-size:12px;`;
+
+  tokens.forEach(t => {
+    const row = document.createElement('div');
+    row.style.cssText = 'padding:8px 12px;cursor:pointer;color:#e6edf3;display:flex;justify-content:space-between;gap:12px;';
+    row.innerHTML = `<span style="font-weight:500">${t.label}</span><span style="color:#8b949e;font-family:monospace">••••${t.token_hint}</span>`;
+    row.addEventListener('mouseenter', () => row.style.background = '#21262d');
+    row.addEventListener('mouseleave', () => row.style.background = '');
+    row.addEventListener('click', async () => {
+      picker.remove();
+      try {
+        const val = await api.getGitHubTokenValue(t.id);
+        inputEl.value = val.token;
+        inputEl.dispatchEvent(new Event('input'));
+      } catch (e) { toast(e.message, 'error'); }
+    });
+    picker.appendChild(row);
+  });
+
+  const rect = inputEl.getBoundingClientRect();
+  picker.style.top  = `${rect.bottom + window.scrollY + 4}px`;
+  picker.style.left = `${rect.left + window.scrollX}px`;
+  picker.style.width = `${Math.max(rect.width, 260)}px`;
+  document.body.appendChild(picker);
+
+  const close = e => { if (!picker.contains(e.target) && e.target !== inputEl) { picker.remove(); document.removeEventListener('click', close, true); } };
+  setTimeout(() => document.addEventListener('click', close, true), 0);
 }

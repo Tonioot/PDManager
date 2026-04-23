@@ -21,6 +21,7 @@ async function request(method, path, body) {
 export const api = {
   health:        ()          => request('GET',    '/health'),
   checkAuth:     ()          => request('GET',    '/auth/check'),
+  getSession:    ()          => request('GET',    '/auth/session'),
   logout:        ()          => request('POST',   '/auth/logout'),
   changePassword:(newPwd)    => request('POST',   '/auth/change-password', { password: newPwd }),
   listApps: ()         => request('GET',    '/apps'),
@@ -53,6 +54,10 @@ export const api = {
   saveNginxConfig:(id, content) => request('PUT', `/apps/${id}/nginx-config`, { content }),
   getPDManagerNginx: () => request('GET',  '/system/nginx-config'),
   applyPDManagerNginx:(data)    => request('POST', '/system/nginx-config', data),
+  listGitHubTokens:  ()         => request('GET',    '/system/github-tokens'),
+  saveGitHubToken:   (label, token) => request('POST', '/system/github-tokens', { label, token }),
+  deleteGitHubToken: (id)       => request('DELETE', `/system/github-tokens/${id}`),
+  getGitHubTokenValue:(id)      => request('GET',    `/system/github-tokens/${id}/value`),
 };
 
 export function wsLogs(appId, onLine) {
