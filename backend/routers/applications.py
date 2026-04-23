@@ -403,6 +403,7 @@ async def update_app(app_id: int, req: UpdateRequest, db: AsyncSession = Depends
         app.restart_policy = req.restart_policy
 
     if app.domain and app.port:
+        _ensure_maintenance_files(app, app.id)
         config = nm.generate_config(
             app.name, app.domain, app.port,
             app.ssl_cert_path, app.ssl_key_path,

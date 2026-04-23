@@ -294,14 +294,16 @@ def generate_config(
 
 def _proxy_config(domain: str, port: int, maint_root: str, ssl_cert: str = None, ssl_key: str = None) -> str:
     # NOTE: proxy_intercept_errors must be inside the proxying location block.
-    # Named locations cannot use try_files — use rewrite instead.
+    # We use a regular 'internal' location (not named @) so that try_files works.
+    # Named locations don't support try_files, which caused the file to not be served.
     server_content = f"""\
     # Auto-serve downtime page when upstream returns 502/503/504.
     # =200 overrides the status so Cloudflare (and other proxies) don't intercept it.
-    error_page 502 503 504 =200 @maintenance;
-    location @maintenance {{
+    error_page 502 503 504 =200 /_pdm_maintenance;
+    location = /_pdm_maintenance {{
+        internal;
         root {maint_root};
-        rewrite ^ /downtime.html break;
+        try_files /downtime.html =200;
         default_type text/html;
     }}
 
