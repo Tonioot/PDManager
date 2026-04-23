@@ -40,6 +40,15 @@ def generate_maintenance_html(
     return _update_template(safe_title, safe_message, safe_color, safe_status_url, safe_logo_data)
 
 
+def _render_visual_block(color: str, icon_svg: str, logo_data: str = None) -> str:
+    inner = (
+        f'<span class="icon-logo"><img src="{logo_data}" alt="Logo" /></span>'
+        if logo_data else
+        f'<span class="icon-glyph">{icon_svg}</span>'
+    )
+    return f'<div class="icon-ring">{inner}</div>'
+
+
 def _downtime_template(title: str, message: str, color: str, status_url: str = None, logo_data: str = None) -> str:
     status_btn = f"""
     <a class="status-link" href="{status_url}" target="_blank" rel="noopener noreferrer">
@@ -47,7 +56,14 @@ def _downtime_template(title: str, message: str, color: str, status_url: str = N
       View status page
       <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="7" y1="17" x2="17" y2="7"/><polyline points="7 7 17 7 17 17"/></svg>
     </a>""" if status_url else ""
-    logo_block = f'<div class="logo"><img src="{logo_data}" alt="Logo" /></div>' if logo_data else ""
+    visual_block = _render_visual_block(
+        color,
+        f"""<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="{color}" stroke-width="1.5" stroke-linecap="round">
+        <circle cx="12" cy="12" r="10"/>
+        <polyline points="12 6 12 12 16 14"/>
+      </svg>""",
+        logo_data,
+    )
 
     return f"""<!DOCTYPE html>
 <html lang="en">
@@ -76,8 +92,6 @@ def _downtime_template(title: str, message: str, color: str, status_url: str = N
       width: 100%;
       text-align: center;
     }}
-    .logo {{ margin-bottom: 28px; }}
-    .logo img {{ max-height: 48px; max-width: 180px; object-fit: contain; }}
     .icon-ring {{
       width: 72px; height: 72px;
       border-radius: 50%;
@@ -86,6 +100,22 @@ def _downtime_template(title: str, message: str, color: str, status_url: str = N
       display: flex; align-items: center; justify-content: center;
       margin: 0 auto 24px;
       position: relative;
+    }}
+    .icon-glyph {{ display: inline-flex; align-items: center; justify-content: center; }}
+    .icon-glyph svg {{ display: block; }}
+    .icon-logo {{
+      width: 52px; height: 52px;
+      border-radius: 50%;
+      overflow: hidden;
+      display: flex; align-items: center; justify-content: center;
+      background: #ffffff;
+      box-shadow: inset 0 0 0 1px rgba(255,255,255,.7);
+    }}
+    .icon-logo img {{
+      width: 100%; height: 100%;
+      object-fit: contain;
+      padding: 8px;
+      background: #ffffff;
     }}
     .icon-ring::before {{
       content: '';
@@ -123,13 +153,7 @@ def _downtime_template(title: str, message: str, color: str, status_url: str = N
 </head>
 <body>
   <div class="card">
-    {logo_block}
-    <div class="icon-ring">
-      <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="{color}" stroke-width="1.5" stroke-linecap="round">
-        <circle cx="12" cy="12" r="10"/>
-        <polyline points="12 6 12 12 16 14"/>
-      </svg>
-    </div>
+    {visual_block}
     <div class="badge"><span class="dot"></span>Service Unavailable</div>
     <h1>{title}</h1>
     <p class="msg">{message}</p>
@@ -149,7 +173,14 @@ def _restart_template(title: str, message: str, color: str, status_url: str = No
       View status page
       <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="7" y1="17" x2="17" y2="7"/><polyline points="7 7 17 7 17 17"/></svg>
     </a>""" if status_url else ""
-    logo_block = f'<div class="logo"><img src="{logo_data}" alt="Logo" /></div>' if logo_data else ""
+    visual_block = _render_visual_block(
+        color,
+        f"""<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="{color}" stroke-width="1.5" stroke-linecap="round">
+        <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/>
+        <path d="M3 3v5h5"/>
+      </svg>""",
+        logo_data,
+    )
 
     return f"""<!DOCTYPE html>
 <html lang="en">
@@ -179,8 +210,6 @@ def _restart_template(title: str, message: str, color: str, status_url: str = No
       width: 100%;
       text-align: center;
     }}
-    .logo {{ margin-bottom: 28px; }}
-    .logo img {{ max-height: 48px; max-width: 180px; object-fit: contain; }}
     .icon-ring {{
       width: 72px; height: 72px;
       border-radius: 50%;
@@ -189,6 +218,22 @@ def _restart_template(title: str, message: str, color: str, status_url: str = No
       display: flex; align-items: center; justify-content: center;
       margin: 0 auto 24px;
       position: relative;
+    }}
+    .icon-glyph {{ display: inline-flex; align-items: center; justify-content: center; }}
+    .icon-glyph svg {{ display: block; }}
+    .icon-logo {{
+      width: 52px; height: 52px;
+      border-radius: 50%;
+      overflow: hidden;
+      display: flex; align-items: center; justify-content: center;
+      background: #ffffff;
+      box-shadow: inset 0 0 0 1px rgba(255,255,255,.7);
+    }}
+    .icon-logo img {{
+      width: 100%; height: 100%;
+      object-fit: contain;
+      padding: 8px;
+      background: #ffffff;
     }}
     .icon-ring::before {{
       content: '';
@@ -232,13 +277,7 @@ def _restart_template(title: str, message: str, color: str, status_url: str = No
 </head>
 <body>
   <div class="card">
-    {logo_block}
-    <div class="icon-ring">
-      <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="{color}" stroke-width="1.5" stroke-linecap="round">
-        <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/>
-        <path d="M3 3v5h5"/>
-      </svg>
-    </div>
+    {visual_block}
     <div class="badge"><span class="spinner"></span>Restarting</div>
     <h1>{title}</h1>
     <p class="msg">{message}</p>
@@ -258,7 +297,15 @@ def _update_template(title: str, message: str, color: str, status_url: str = Non
       View status page
       <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="7" y1="17" x2="17" y2="7"/><polyline points="7 7 17 7 17 17"/></svg>
     </a>""" if status_url else ""
-    logo_block = f'<div class="logo"><img src="{logo_data}" alt="Logo" /></div>' if logo_data else ""
+    visual_block = _render_visual_block(
+        color,
+        f"""<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="{color}" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+        <polyline points="16 16 12 12 8 16"/>
+        <line x1="12" y1="12" x2="12" y2="21"/>
+        <path d="M20.39 18.39A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.3"/>
+      </svg>""",
+        logo_data,
+    )
 
     return f"""<!DOCTYPE html>
 <html lang="en">
@@ -288,15 +335,37 @@ def _update_template(title: str, message: str, color: str, status_url: str = Non
       width: 100%;
       text-align: center;
     }}
-    .logo {{ margin-bottom: 28px; }}
-    .logo img {{ max-height: 48px; max-width: 180px; object-fit: contain; }}
-    .icon-wrap {{
+    .icon-ring {{
       width: 72px; height: 72px;
-      border-radius: 20px;
+      border-radius: 50%;
       background: color-mix(in srgb, {color} 8%, #fff);
-      border: 1.5px solid color-mix(in srgb, {color} 22%, transparent);
+      border: 1.5px solid color-mix(in srgb, {color} 20%, transparent);
       display: flex; align-items: center; justify-content: center;
       margin: 0 auto 24px;
+      position: relative;
+    }}
+    .icon-ring::before {{
+      content: '';
+      position: absolute; inset: -5px; border-radius: 50%;
+      border: 2px solid color-mix(in srgb, {color} 15%, transparent);
+      border-top-color: {color};
+      animation: spin 1.6s linear infinite;
+    }}
+    .icon-glyph {{ display: inline-flex; align-items: center; justify-content: center; }}
+    .icon-glyph svg {{ display: block; }}
+    .icon-logo {{
+      width: 52px; height: 52px;
+      border-radius: 50%;
+      overflow: hidden;
+      display: flex; align-items: center; justify-content: center;
+      background: #ffffff;
+      box-shadow: inset 0 0 0 1px rgba(255,255,255,.7);
+    }}
+    .icon-logo img {{
+      width: 100%; height: 100%;
+      object-fit: contain;
+      padding: 8px;
+      background: #ffffff;
     }}
     .badge {{
       display: inline-flex; align-items: center; gap: 8px;
@@ -333,14 +402,7 @@ def _update_template(title: str, message: str, color: str, status_url: str = Non
 </head>
 <body>
   <div class="card">
-    {logo_block}
-    <div class="icon-wrap">
-      <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="{color}" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-        <polyline points="16 16 12 12 8 16"/>
-        <line x1="12" y1="12" x2="12" y2="21"/>
-        <path d="M20.39 18.39A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.3"/>
-      </svg>
-    </div>
+    {visual_block}
     <div class="badge"><span class="spinner"></span>Deploying Update</div>
     <h1>{title}</h1>
     <p class="msg">{message}</p>

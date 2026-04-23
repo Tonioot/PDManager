@@ -20,6 +20,9 @@ import token_vault
 router = APIRouter(prefix="/api/apps", tags=["applications"])
 log = logging.getLogger("pdm.apps")
 
+RESTART_READY_TIMEOUT_SECONDS = 180
+RESTART_READY_POLL_SECONDS = 1
+
 
 class DeployRequest(BaseModel):
     name: str
@@ -107,6 +110,60 @@ def _ensure_maintenance_files(app: Application, app_id: int) -> None:
     )
     ok, msg = nm.write_maintenance_files(app_id, downtime_html, update_html, restart_html)
     log.info("[ensure-files] write result ok=%s msg=%r", ok, msg)
+
+
+async def _wait_for_restart_ready(app_id: int, pid: int, port: Optional[int]) -> tuple[bool, str]:
+    deadline = asyncio.get_running_loop().time() + RESTART_READY_TIMEOUT_SECONDS
+
+    while asyncio.get_running_loop().time() < deadline:
+        if pid and not pm.is_process_running(pid, app_id):
+            return False, "process exited before becoming ready"
+
+        if port:
+            listening_pid = await asyncio.to_thread(pm.find_process_by_port, port)
+            if listening_pid:
+                return True, f"port {port} is accepting connections"
+        elif pid and pm.is_process_running(pid, app_id):
+            return True, "process is running"
+
+        await asyncio.sleep(RESTART_READY_POLL_SECONDS)
+
+    if port:
+        return False, f"timed out waiting for port {port}"
+    return False, "timed out waiting for process readiness"
+
+
+async def _restore_nginx_after_restart(
+    app_id: int,
+    app_name: str,
+    domain: str,
+    port: int,
+    ssl_cert_path: Optional[str],
+    ssl_key_path: Optional[str],
+    pid: int,
+    started_at: float,
+) -> None:
+    ready, reason = await _wait_for_restart_ready(app_id, pid, port)
+    elapsed = max(asyncio.get_running_loop().time() - started_at, 0)
+
+    normal_cfg = nm.generate_config(
+        app_name, domain, port,
+        ssl_cert_path, ssl_key_path,
+        app_id=app_id, mode="normal",
+    )
+    ok, msg = nm.write_nginx_config(app_name, normal_cfg)
+    log.info(
+        "[restart-restore] app_id=%d ready=%s elapsed=%.1fs reason=%r nginx_ok=%s msg=%r",
+        app_id, ready, elapsed, reason, ok, msg,
+    )
+
+    if ok:
+        if ready:
+            pm._push_line(app_id, f"Restart page cleared after {elapsed:.1f}s ({reason}).")
+        else:
+            pm._push_line(app_id, f"Restart page timed out after {elapsed:.1f}s; switched back to normal proxy ({reason}).")
+    else:
+        pm._push_line(app_id, f"Failed to restore nginx after restart: {msg}")
 
 
 def _resolve_token(req_token: Optional[str], req_token_id: Optional[str]) -> Optional[str]:
@@ -490,6 +547,7 @@ async def stop_app(app_id: int, db: AsyncSession = Depends(get_db)):
 @router.post("/{app_id}/restart")
 async def restart_app(app_id: int, db: AsyncSession = Depends(get_db)):
     app = await _get_or_404(app_id, db)
+    restart_started_at = asyncio.get_running_loop().time()
 
     # Temporarily show restart page via nginx (only when in normal mode)
     show_restart_page = (
@@ -504,6 +562,7 @@ async def restart_app(app_id: int, db: AsyncSession = Depends(get_db)):
             app_id=app_id, mode="restart",
         )
         nm.write_nginx_config(app.name, restart_cfg)
+        pm._push_line(app_id, "Restart page enabled while the app comes back online.")
 
     if app.pid:
         pm.stop_app(app_id, app.pid)
@@ -516,14 +575,15 @@ async def restart_app(app_id: int, db: AsyncSession = Depends(get_db)):
     app.pid = pid
     app.status = "running"
 
-    # Restore nginx to normal mode after restart
+    # Restore nginx to normal mode once the app is actually listening again.
     if show_restart_page:
-        normal_cfg = nm.generate_config(
+        asyncio.create_task(_restore_nginx_after_restart(
+            app_id,
             app.name, app.domain, app.port,
             app.ssl_cert_path, app.ssl_key_path,
-            app_id=app_id, mode="normal",
-        )
-        nm.write_nginx_config(app.name, normal_cfg)
+            pid,
+            restart_started_at,
+        ))
 
     await db.commit()
     return {"status": "running", "pid": pid}
