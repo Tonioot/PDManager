@@ -154,7 +154,6 @@ def _downtime_template(title: str, message: str, color: str, status_url: str = N
 <body>
   <div class="card">
     {visual_block}
-    <div class="badge"><span class="dot"></span>Service Unavailable</div>
     <h1>{title}</h1>
     <p class="msg">{message}</p>
     <div class="divider"></div>
@@ -278,7 +277,6 @@ def _restart_template(title: str, message: str, color: str, status_url: str = No
 <body>
   <div class="card">
     {visual_block}
-    <div class="badge"><span class="spinner"></span>Restarting</div>
     <h1>{title}</h1>
     <p class="msg">{message}</p>
     <div class="track"><div class="bar"></div></div>
@@ -403,7 +401,6 @@ def _update_template(title: str, message: str, color: str, status_url: str = Non
 <body>
   <div class="card">
     {visual_block}
-    <div class="badge"><span class="spinner"></span>Deploying Update</div>
     <h1>{title}</h1>
     <p class="msg">{message}</p>
     <div class="track"><div class="bar"></div></div>
