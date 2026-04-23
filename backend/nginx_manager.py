@@ -1,6 +1,8 @@
+import logging
 import os
 import subprocess
 
+log = logging.getLogger("pdm.nginx")
 
 NGINX_SITES_DIR = "/etc/nginx/sites-available"
 NGINX_ENABLED_DIR = "/etc/nginx/sites-enabled"
@@ -241,27 +243,34 @@ def _update_template(title: str, message: str, color: str) -> str:
 def write_maintenance_files(app_id: int, downtime_html: str, update_html: str) -> tuple[bool, str]:
     """Write downtime.html and update.html to /var/www/pdmanager/maintenance/{app_id}/."""
     app_dir = os.path.join(MAINTENANCE_DIR, str(app_id))
+    log.info("[maint-files] writing to %s", app_dir)
     try:
         r = subprocess.run(["sudo", "mkdir", "-p", app_dir], capture_output=True, text=True)
+        log.info("[maint-files] mkdir rc=%d stderr=%r", r.returncode, r.stderr)
         if r.returncode != 0:
             return False, r.stderr or "Failed to create maintenance directory"
 
         for filename, content in [("downtime.html", downtime_html), ("update.html", update_html)]:
             path = os.path.join(app_dir, filename)
             r = subprocess.run(["sudo", "tee", path], input=content, text=True, capture_output=True)
+            log.info("[maint-files] tee %s rc=%d stderr=%r", path, r.returncode, r.stderr)
             if r.returncode != 0:
                 return False, r.stderr or f"Failed to write {filename}"
 
-        subprocess.run(
+        r = subprocess.run(
             ["sudo", "chmod", "644",
              os.path.join(app_dir, "downtime.html"),
              os.path.join(app_dir, "update.html")],
-            capture_output=True,
+            capture_output=True, text=True,
         )
+        log.info("[maint-files] chmod rc=%d stderr=%r", r.returncode, r.stderr)
+        log.info("[maint-files] done — files: %s", os.listdir(app_dir) if os.path.isdir(app_dir) else "DIR MISSING")
         return True, "OK"
     except FileNotFoundError:
+        log.error("[maint-files] sudo not found")
         return False, "sudo not available — cannot write maintenance files"
     except Exception as e:
+        log.exception("[maint-files] unexpected error")
         return False, str(e)
 
 
@@ -397,6 +406,8 @@ def write_nginx_config(app_name: str, config: str) -> tuple[bool, str]:
     safe = _safe_name(app_name)
     config_path = os.path.join(NGINX_SITES_DIR, safe)
     enabled_path = os.path.join(NGINX_ENABLED_DIR, safe)
+    log.info("[nginx-cfg] writing config for app=%r safe=%r path=%s", app_name, safe, config_path)
+    log.debug("[nginx-cfg] config content:\n%s", config)
 
     try:
         # Write via sudo tee (works without direct write permission)
@@ -404,6 +415,7 @@ def write_nginx_config(app_name: str, config: str) -> tuple[bool, str]:
             ["sudo", "tee", config_path],
             input=config, text=True, capture_output=True,
         )
+        log.info("[nginx-cfg] tee config rc=%d stderr=%r", result.returncode, result.stderr)
         if result.returncode != 0:
             return False, result.stderr or "Failed to write nginx config"
 
@@ -413,19 +425,28 @@ def write_nginx_config(app_name: str, config: str) -> tuple[bool, str]:
                 ["sudo", "ln", "-sf", config_path, enabled_path],
                 capture_output=True, text=True,
             )
+            log.info("[nginx-cfg] symlink rc=%d stderr=%r", r.returncode, r.stderr)
             if r.returncode != 0:
                 return False, r.stderr or "Failed to enable nginx site"
+        else:
+            log.info("[nginx-cfg] symlink already exists at %s", enabled_path)
+            # Always re-create symlink to ensure it points to current config
+            subprocess.run(["sudo", "ln", "-sf", config_path, enabled_path], capture_output=True)
 
         # Validate config
         result = subprocess.run(["sudo", "nginx", "-t"], capture_output=True, text=True)
+        log.info("[nginx-cfg] nginx -t rc=%d stdout=%r stderr=%r", result.returncode, result.stdout, result.stderr)
         if result.returncode != 0:
             return False, result.stderr
 
-        subprocess.run(["sudo", "systemctl", "reload", "nginx"], capture_output=True)
+        r = subprocess.run(["sudo", "systemctl", "reload", "nginx"], capture_output=True, text=True)
+        log.info("[nginx-cfg] reload rc=%d stderr=%r", r.returncode, r.stderr)
         return True, "OK"
     except FileNotFoundError:
+        log.error("[nginx-cfg] nginx not found")
         return False, "nginx not found — install nginx first (sudo apt install nginx)"
     except Exception as e:
+        log.exception("[nginx-cfg] unexpected error")
         return False, str(e)
 
 

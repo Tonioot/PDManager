@@ -1,5 +1,6 @@
 import asyncio
 import json
+import logging
 import os
 import shutil
 import subprocess
@@ -17,6 +18,7 @@ import nginx_manager as nm
 import token_vault
 
 router = APIRouter(prefix="/api/apps", tags=["applications"])
+log = logging.getLogger("pdm.apps")
 
 
 class DeployRequest(BaseModel):
@@ -67,6 +69,8 @@ def _get_nginx_mode(app: Application) -> str:
 
 def _ensure_maintenance_files(app: Application, app_id: int) -> None:
     """Write maintenance HTML files from stored config (or defaults)."""
+    log.info("[ensure-files] app_id=%d downtime_page=%r update_page=%r",
+             app_id, app.downtime_page, app.update_page)
     downtime_cfg = json.loads(app.downtime_page or "{}")
     update_cfg   = json.loads(app.update_page   or "{}")
 
@@ -84,7 +88,8 @@ def _ensure_maintenance_files(app: Application, app_id: int) -> None:
         update_cfg.get("custom_html"),
         "update",
     )
-    nm.write_maintenance_files(app_id, downtime_html, update_html)
+    ok, msg = nm.write_maintenance_files(app_id, downtime_html, update_html)
+    log.info("[ensure-files] write result ok=%s msg=%r", ok, msg)
 
 
 def _resolve_token(req_token: Optional[str], req_token_id: Optional[str]) -> Optional[str]:
@@ -683,14 +688,18 @@ async def toggle_maintenance_mode(app_id: int, db: AsyncSession = Depends(get_db
     if app.maintenance_mode:
         app.update_mode = False  # mutex: only one mode at a time
 
+    mode = _get_nginx_mode(app)
+    log.info("[toggle-maintenance] app_id=%d new_mode=%r nginx_mode=%r domain=%r port=%r",
+             app_id, app.maintenance_mode, mode, app.domain, app.port)
+
     _ensure_maintenance_files(app, app_id)
-    mode   = _get_nginx_mode(app)
     config = nm.generate_config(
         app.name, app.domain, app.port,
         app.ssl_cert_path, app.ssl_key_path,
         app_id=app_id, mode=mode,
     )
     ok, msg = nm.write_nginx_config(app.name, config)
+    log.info("[toggle-maintenance] write_nginx_config ok=%s msg=%r", ok, msg)
     if not ok:
         raise HTTPException(500, f"Nginx config failed: {msg}")
 
@@ -708,14 +717,18 @@ async def toggle_update_mode(app_id: int, db: AsyncSession = Depends(get_db)):
     if app.update_mode:
         app.maintenance_mode = False  # mutex: only one mode at a time
 
+    mode = _get_nginx_mode(app)
+    log.info("[toggle-update] app_id=%d new_mode=%r nginx_mode=%r domain=%r port=%r",
+             app_id, app.update_mode, mode, app.domain, app.port)
+
     _ensure_maintenance_files(app, app_id)
-    mode   = _get_nginx_mode(app)
     config = nm.generate_config(
         app.name, app.domain, app.port,
         app.ssl_cert_path, app.ssl_key_path,
         app_id=app_id, mode=mode,
     )
     ok, msg = nm.write_nginx_config(app.name, config)
+    log.info("[toggle-update] write_nginx_config ok=%s msg=%r", ok, msg)
     if not ok:
         raise HTTPException(500, f"Nginx config failed: {msg}")
 
@@ -756,3 +769,59 @@ async def preview_maintenance_page(
             "update",
         )
     return HTMLResponse(content=html)
+
+
+@router.get("/{app_id}/nginx-debug")
+async def nginx_debug(app_id: int, db: AsyncSession = Depends(get_db)):
+    """Return a full diagnostic snapshot for nginx + maintenance config of this app."""
+    import subprocess as sp
+    app = await _get_or_404(app_id, db)
+
+    safe_name = nm._safe_name(app.name)
+    config_path   = f"{nm.NGINX_SITES_DIR}/{safe_name}"
+    enabled_path  = f"{nm.NGINX_ENABLED_DIR}/{safe_name}"
+    maint_dir     = f"{nm.MAINTENANCE_DIR}/{app_id}"
+
+    def _read_file(path: str) -> str:
+        r = sp.run(["sudo", "cat", path], capture_output=True, text=True)
+        if r.returncode == 0:
+            return r.stdout
+        return f"ERROR ({r.returncode}): {r.stderr.strip()}"
+
+    def _ls(path: str) -> list:
+        r = sp.run(["sudo", "ls", "-la", path], capture_output=True, text=True)
+        if r.returncode == 0:
+            return r.stdout.strip().splitlines()
+        return [f"ERROR: {r.stderr.strip()}"]
+
+    nginx_test  = sp.run(["sudo", "nginx", "-t"], capture_output=True, text=True)
+    nginx_status = sp.run(["sudo", "systemctl", "is-active", "nginx"], capture_output=True, text=True)
+
+    return {
+        "app": {
+            "id":               app.id,
+            "name":             app.name,
+            "domain":           app.domain,
+            "port":             app.port,
+            "nginx_enabled":    app.nginx_enabled,
+            "maintenance_mode": app.maintenance_mode,
+            "update_mode":      app.update_mode,
+            "computed_mode":    _get_nginx_mode(app),
+        },
+        "nginx": {
+            "status":           nginx_status.stdout.strip(),
+            "config_test":      nginx_test.stderr.strip() or nginx_test.stdout.strip(),
+            "config_test_ok":   nginx_test.returncode == 0,
+        },
+        "files": {
+            "sites_available_exists": sp.run(["sudo", "test", "-f", config_path], capture_output=True).returncode == 0,
+            "sites_enabled_exists":   sp.run(["sudo", "test", "-L", enabled_path], capture_output=True).returncode == 0,
+            "maintenance_dir_ls":     _ls(maint_dir),
+            "nginx_config_content":   _read_file(config_path),
+        },
+        "generated_config": nm.generate_config(
+            app.name, app.domain or "(no domain)", app.port or 0,
+            app.ssl_cert_path, app.ssl_key_path,
+            app_id=app_id, mode=_get_nginx_mode(app),
+        ),
+    }

@@ -1,5 +1,6 @@
 import asyncio
 import json
+import logging
 import os
 import time as _time
 from collections import deque
@@ -23,6 +24,11 @@ import auth
 import nginx_manager as nm
 import process_manager as pm
 import token_vault
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+)
 
 PORT = 7823
 FRONTEND_DIR = os.path.join(os.path.dirname(__file__), "..", "frontend")
