@@ -506,7 +506,7 @@ function initSettings() {
 
   // Pick saved GitHub token
   document.getElementById('cfg-token-pick').addEventListener('click', () => {
-    pickGitHubToken(document.getElementById('cfg-token'));
+    pickGitHubToken(document.getElementById('cfg-token'), document.getElementById('cfg-token-id'));
   });
 
   // Save
@@ -600,7 +600,8 @@ async function saveSettings() {
     if (k) env_vars[k] = v;
   });
 
-  const token = document.getElementById('cfg-token')?.value?.trim();
+  const tokenId = document.getElementById('cfg-token-id')?.value?.trim();
+  const token   = document.getElementById('cfg-token')?.value?.trim();
 
   const payload = {
     start_command:  document.getElementById('cfg-cmd').value.trim()    || null,
@@ -611,7 +612,7 @@ async function saveSettings() {
     auto_start:     document.getElementById('cfg-autostart').checked,
     restart_policy: document.getElementById('cfg-restart-policy').value,
     env_vars,
-    ...(token ? { github_token: token } : {}),
+    ...(tokenId ? { github_token_id: tokenId } : token ? { github_token: token } : {}),
   };
 
   try {

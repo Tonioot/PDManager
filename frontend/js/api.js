@@ -57,7 +57,6 @@ export const api = {
   listGitHubTokens:  ()         => request('GET',    '/system/github-tokens'),
   saveGitHubToken:   (label, token) => request('POST', '/system/github-tokens', { label, token }),
   deleteGitHubToken: (id)       => request('DELETE', `/system/github-tokens/${id}`),
-  getGitHubTokenValue:(id)      => request('GET',    `/system/github-tokens/${id}/value`),
 };
 
 export function wsLogs(appId, onLine) {

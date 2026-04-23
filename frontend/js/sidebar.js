@@ -344,8 +344,10 @@ async function renderTokenList(modal) {
   }
 }
 
-// Exported so the deploy modal can call it
-export async function pickGitHubToken(inputEl) {
+// Exported so the deploy modal and settings page can call it.
+// tokenInput    – the visible password <input> (used for display only when a vault token is chosen)
+// tokenIdInput  – a hidden <input> that stores the vault token ID (sent to backend instead of raw value)
+export async function pickGitHubToken(tokenInput, tokenIdInput) {
   let tokens = [];
   try { tokens = await api.listGitHubTokens(); } catch { return; }
   if (!tokens.length) { toast('No saved tokens — save one via the GitHub Tokens button', 'warn'); return; }
@@ -364,23 +366,32 @@ export async function pickGitHubToken(inputEl) {
     row.innerHTML = `<span style="font-weight:500">${t.label}</span><span style="color:#8b949e;font-family:monospace">••••${t.token_hint}</span>`;
     row.addEventListener('mouseenter', () => row.style.background = '#21262d');
     row.addEventListener('mouseleave', () => row.style.background = '');
-    row.addEventListener('click', async () => {
+    row.addEventListener('click', () => {
       picker.remove();
-      try {
-        const val = await api.getGitHubTokenValue(t.id);
-        inputEl.value = val.token;
-        inputEl.dispatchEvent(new Event('input'));
-      } catch (e) { toast(e.message, 'error'); }
+      // Store only the vault ID server-side; show a non-editable label in the input
+      if (tokenIdInput) tokenIdInput.value = t.id;
+      // Show the label as a visual indicator — placeholder style
+      tokenInput.value = '';
+      tokenInput.placeholder = `🔑 ${t.label} (••••${t.token_hint})`;
+      tokenInput.dataset.vaultLabel = t.label;
+      // Clear the vault selection when the user starts typing a new token manually
+      const clearVault = () => {
+        if (tokenIdInput) tokenIdInput.value = '';
+        tokenInput.placeholder = tokenInput.dataset.origPlaceholder || '';
+        delete tokenInput.dataset.vaultLabel;
+        tokenInput.removeEventListener('input', clearVault);
+      };
+      tokenInput.addEventListener('input', clearVault);
     });
     picker.appendChild(row);
   });
 
-  const rect = inputEl.getBoundingClientRect();
+  const rect = tokenInput.getBoundingClientRect();
   picker.style.top  = `${rect.bottom + window.scrollY + 4}px`;
   picker.style.left = `${rect.left + window.scrollX}px`;
   picker.style.width = `${Math.max(rect.width, 260)}px`;
   document.body.appendChild(picker);
 
-  const close = e => { if (!picker.contains(e.target) && e.target !== inputEl) { picker.remove(); document.removeEventListener('click', close, true); } };
+  const close = e => { if (!picker.contains(e.target) && e.target !== tokenInput) { picker.remove(); document.removeEventListener('click', close, true); } };
   setTimeout(() => document.addEventListener('click', close, true), 0);
 }

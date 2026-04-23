@@ -77,7 +77,7 @@ export function openDeployModal(onSuccess) {
 
   // Pick saved GitHub token
   modal.querySelector('#f-token-pick').addEventListener('click', () => {
-    pickGitHubToken(modal.querySelector('#f-token'));
+    pickGitHubToken(modal.querySelector('#f-token'), modal.querySelector('#f-token-id'));
   });
 
   // Submit
@@ -130,6 +130,7 @@ function modalHTML() {
                   Saved
                 </button>
               </div>
+              <input type="hidden" id="f-token-id" />
             </div>
           </div>
 
@@ -192,12 +193,15 @@ async function handleDeploy(modal, form, onSuccess, close) {
     if (k) env_vars[k] = v;
   });
 
+  const tokenId = modal.querySelector('#f-token-id').value.trim();
   const payload = {
-    name:         modal.querySelector('#f-name').value.trim(),
-    repo_url:     modal.querySelector('#f-repo').value.trim(),
-    github_token: modal.querySelector('#f-token').value.trim() || null,
-    start_command:modal.querySelector('#f-cmd').value.trim() || null,
-    port:         parseInt(modal.querySelector('#f-port').value) || null,
+    name:            modal.querySelector('#f-name').value.trim(),
+    repo_url:        modal.querySelector('#f-repo').value.trim(),
+    ...(tokenId
+      ? { github_token_id: tokenId }
+      : { github_token: modal.querySelector('#f-token').value.trim() || null }),
+    start_command: modal.querySelector('#f-cmd').value.trim() || null,
+    port:          parseInt(modal.querySelector('#f-port').value) || null,
     env_vars,
   };
 

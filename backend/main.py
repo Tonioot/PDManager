@@ -22,6 +22,7 @@ from routers import applications, files, logs, stats
 import auth
 import nginx_manager as nm
 import process_manager as pm
+import token_vault
 
 PORT = 7823
 FRONTEND_DIR = os.path.join(os.path.dirname(__file__), "..", "frontend")
@@ -322,24 +323,6 @@ async def upload_system_cert(file: UploadFile = File(...)):
 
 
 # ── GitHub token vault ────────────────────────────────────────────────────────
-_TOKENS_FILE = os.path.expanduser("~/.pdmanager/github_tokens.json")
-
-
-def _load_tokens() -> list[dict]:
-    try:
-        with open(_TOKENS_FILE) as f:
-            return json.load(f)
-    except Exception:
-        return []
-
-
-def _save_tokens(tokens: list[dict]) -> None:
-    os.makedirs(os.path.dirname(_TOKENS_FILE), exist_ok=True)
-    with open(_TOKENS_FILE, "w") as f:
-        json.dump(tokens, f)
-    os.chmod(_TOKENS_FILE, 0o600)
-
-
 class SaveTokenRequest(BaseModel):
     label: str
     token: str
@@ -347,9 +330,7 @@ class SaveTokenRequest(BaseModel):
 
 @app.get("/api/system/github-tokens")
 async def list_github_tokens():
-    tokens = _load_tokens()
-    # Never return the raw token — only the label and id
-    return [{"id": t["id"], "label": t["label"], "token_hint": t["token"][-4:]} for t in tokens]
+    return token_vault.list_hints()
 
 
 @app.post("/api/system/github-tokens")
@@ -358,34 +339,17 @@ async def save_github_token(req: SaveTokenRequest):
         raise HTTPException(400, "Label is required")
     if not req.token.strip():
         raise HTTPException(400, "Token is required")
-    tokens = _load_tokens()
-    # Deduplicate by label (update if same label)
-    existing = next((t for t in tokens if t["label"] == req.label.strip()), None)
-    if existing:
-        existing["token"] = req.token.strip()
-    else:
-        import uuid
-        tokens.append({"id": str(uuid.uuid4()), "label": req.label.strip(), "token": req.token.strip()})
-    _save_tokens(tokens)
+    token_vault.add(req.label.strip(), req.token.strip())
     return {"ok": True}
 
 
 @app.delete("/api/system/github-tokens/{token_id}")
 async def delete_github_token(token_id: str):
-    tokens = _load_tokens()
-    tokens = [t for t in tokens if t["id"] != token_id]
-    _save_tokens(tokens)
+    token_vault.remove(token_id)
     return {"ok": True}
 
 
-@app.get("/api/system/github-tokens/{token_id}/value")
-async def get_github_token_value(token_id: str):
-    """Return the raw token value so the frontend can fill in a form field."""
-    tokens = _load_tokens()
-    t = next((t for t in tokens if t["id"] == token_id), None)
-    if not t:
-        raise HTTPException(404, "Token not found")
-    return {"token": t["token"]}
+# /value endpoint intentionally omitted — raw tokens are resolved server-side only.
 
 
 # ── Routers ───────────────────────────────────────────────────────────────────

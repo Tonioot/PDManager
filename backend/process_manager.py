@@ -1,6 +1,8 @@
 import asyncio
 import json
 import os
+import shlex
+import shutil
 import signal
 import subprocess
 import threading
@@ -329,6 +331,11 @@ def attach_log_tailer(
     threading.Thread(target=_reader, daemon=True).start()
 
 
+def _systemd_run() -> str | None:
+    """Return path to systemd-run if available, else None."""
+    return shutil.which("systemd-run")
+
+
 def start_app(app_id: int, app_name: str, command: str, working_dir: str, env_vars: dict = None) -> int:
     env = os.environ.copy()
     if env_vars:
@@ -342,16 +349,42 @@ def start_app(app_id: int, app_name: str, command: str, working_dir: str, env_va
     # No pipe means pdmanager restarts never send SIGPIPE to the child.
     log_file = open(log_path, "w")
 
-    proc = subprocess.Popen(
-        command,
-        shell=True,
-        cwd=working_dir,
-        env=env,
-        stdout=log_file,
-        stderr=log_file,
-        # New session so we can kill the whole process group cleanly
-        start_new_session=True,
-    )
+    systemd_run = _systemd_run()
+    if systemd_run:
+        # Wrap in a transient systemd scope unit so the app lives in its own
+        # cgroup and is NOT killed when the PDManager service stops.
+        # --collect  : auto-remove unit after exit
+        # --no-ask-password: never prompt interactively
+        unit_name = f"pdm-app-{app_id}"
+        cmd = [
+            systemd_run,
+            "--scope",
+            "--collect",
+            "--no-ask-password",
+            f"--unit={unit_name}",
+            "--",
+            "/bin/sh", "-c", command,
+        ]
+        proc = subprocess.Popen(
+            cmd,
+            cwd=working_dir,
+            env=env,
+            stdout=log_file,
+            stderr=log_file,
+            start_new_session=True,
+        )
+    else:
+        # Fallback: no systemd-run — start_new_session prevents SIGHUP;
+        # note apps may be killed by cgroup teardown on systemd systems.
+        proc = subprocess.Popen(
+            command,
+            shell=True,
+            cwd=working_dir,
+            env=env,
+            stdout=log_file,
+            stderr=log_file,
+            start_new_session=True,
+        )
     # Parent no longer needs the fd; child has its own copy
     log_file.close()
 

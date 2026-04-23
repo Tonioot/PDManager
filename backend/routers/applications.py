@@ -14,6 +14,7 @@ from database import get_db
 from models import Application
 import process_manager as pm
 import nginx_manager as nm
+import token_vault
 
 router = APIRouter(prefix="/api/apps", tags=["applications"])
 
@@ -22,6 +23,7 @@ class DeployRequest(BaseModel):
     name: str
     repo_url: str
     github_token: Optional[str] = None
+    github_token_id: Optional[str] = None   # ID of a saved vault token
     domain: Optional[str] = None
     ssl_cert_path: Optional[str] = None
     ssl_key_path: Optional[str] = None
@@ -38,8 +40,18 @@ class UpdateRequest(BaseModel):
     port: Optional[int] = None
     env_vars: Optional[dict] = None
     github_token: Optional[str] = None
+    github_token_id: Optional[str] = None   # ID of a saved vault token
     auto_start:     Optional[bool] = None
     restart_policy: Optional[str] = None   # no | always | on-failure
+
+
+def _resolve_token(req_token: Optional[str], req_token_id: Optional[str]) -> Optional[str]:
+    """Return raw token: prefer vault lookup, fall back to inline value."""
+    if req_token_id:
+        resolved = token_vault.resolve(req_token_id)
+        if resolved:
+            return resolved
+    return req_token or None
 
 
 def _build_clone_url(repo_url: str, token: Optional[str]) -> str:
@@ -279,7 +291,7 @@ async def deploy_app(req: DeployRequest, background_tasks: BackgroundTasks, db: 
     app = Application(
         name=req.name,
         repo_url=req.repo_url,
-        github_token=req.github_token,
+        github_token=_resolve_token(req.github_token, req.github_token_id),
         domain=req.domain,
         ssl_cert_path=req.ssl_cert_path,
         ssl_key_path=req.ssl_key_path,
@@ -337,8 +349,9 @@ async def update_app(app_id: int, req: UpdateRequest, db: AsyncSession = Depends
         app.port = req.port
     if req.env_vars is not None:
         app.env_vars = json.dumps(req.env_vars)
-    if req.github_token is not None:
-        app.github_token = req.github_token
+    resolved = _resolve_token(req.github_token, req.github_token_id)
+    if resolved is not None:
+        app.github_token = resolved
     if req.auto_start is not None:
         app.auto_start = req.auto_start
     if req.restart_policy is not None and req.restart_policy in ("no", "always", "on-failure"):
