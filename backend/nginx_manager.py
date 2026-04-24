@@ -9,7 +9,7 @@ NGINX_ENABLED_DIR = "/etc/nginx/sites-enabled"
 MAINTENANCE_DIR = "/var/www/pdmanager/maintenance"
 
 
-# â”€â”€ Maintenance page HTML generation â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# â"€â"€ Maintenance page HTML generation â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 
 def generate_maintenance_html(
     title: str,
@@ -436,17 +436,17 @@ def _update_template(title: str, message: str, color: str, status_url: str = Non
             capture_output=True, text=True,
         )
         log.info("[maint-files] chmod rc=%d stderr=%r", r.returncode, r.stderr)
-        log.info("[maint-files] done â€” files: %s", os.listdir(app_dir) if os.path.isdir(app_dir) else "DIR MISSING")
+        log.info("[maint-files] done - files: %s", os.listdir(app_dir) if os.path.isdir(app_dir) else "DIR MISSING")
         return True, "OK"
     except FileNotFoundError:
         log.error("[maint-files] sudo not found")
-        return False, "sudo not available â€” cannot write maintenance files"
+        return False, "sudo not available  -  cannot write maintenance files"
     except Exception as e:
         log.exception("[maint-files] unexpected error")
         return False, str(e)
 
 
-# â”€â”€ Nginx config generation â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# â"€â"€ Nginx config generation â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 
 def generate_config(
     app_name: str,
@@ -460,9 +460,9 @@ def generate_config(
     """Generate an nginx server block.
 
     mode:
-      'normal'      â€” proxy to app; 502/503 automatically serve downtime.html
-      'maintenance' â€” serve downtime.html statically (app bypassed)
-      'update'      â€” serve update.html statically (app bypassed)
+      'normal'       -  proxy to app; 502/503 automatically serve downtime.html
+      'maintenance'  -  serve downtime.html statically (app bypassed)
+      'update'       -  serve update.html statically (app bypassed)
     """
     maint_root = f"{MAINTENANCE_DIR}/{app_id}" if app_id else f"{MAINTENANCE_DIR}/0"
 
@@ -536,7 +536,7 @@ def _static_page_config(domain: str, maint_root: str, filename: str, ssl_cert: s
     # Serve a single static HTML file with a real 503 status.
     # error_page 503 points to an internal location that reads the file;
     # the outer location just triggers the 503 unconditionally.
-    server_content = f”””\
+    server_content = f"""\
     root {maint_root};
 
     error_page 503 /_pdm_static;
@@ -544,13 +544,13 @@ def _static_page_config(domain: str, maint_root: str, filename: str, ssl_cert: s
         internal;
         try_files /{filename} =503;
         default_type text/html;
-        add_header Cache-Control “no-store, no-cache, must-revalidate” always;
-        add_header Pragma “no-cache” always;
+        add_header Cache-Control "no-store, no-cache, must-revalidate" always;
+        add_header Pragma "no-cache" always;
     }}
 
     location / {{
         return 503;
-    }}”””
+    }}"""
 
     if ssl_cert and ssl_key:
         return f"""server {{
@@ -666,7 +666,7 @@ def write_nginx_config(app_name: str, config: str) -> tuple[bool, str]:
         return True, "OK"
     except FileNotFoundError:
         log.error("[nginx-cfg] nginx not found")
-        return False, "nginx not found â€” install nginx first (sudo apt install nginx)"
+        return False, "nginx not found  -  install nginx first (sudo apt install nginx)"
     except Exception as e:
         log.exception("[nginx-cfg] unexpected error")
         return False, str(e)
