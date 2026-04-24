@@ -63,6 +63,7 @@ class MaintenanceSettings(BaseModel):
     downtime_page: MaintenancePageConfig = MaintenancePageConfig()
     update_page: MaintenancePageConfig = MaintenancePageConfig(color="#f0883e")
     restart_page: MaintenancePageConfig = MaintenancePageConfig(color="#388bfd")
+    starting_page: MaintenancePageConfig = MaintenancePageConfig(color="#388bfd")
 
 
 def _get_nginx_mode(app: Application) -> str:
@@ -75,11 +76,12 @@ def _get_nginx_mode(app: Application) -> str:
 
 def _ensure_maintenance_files(app: Application, app_id: int) -> None:
     """Write maintenance HTML files from stored config (or defaults)."""
-    log.info("[ensure-files] app_id=%d downtime_page=%r update_page=%r restart_page=%r",
-             app_id, app.downtime_page, app.update_page, app.restart_page)
-    downtime_cfg = json.loads(app.downtime_page or "{}")
-    update_cfg   = json.loads(app.update_page   or "{}")
-    restart_cfg  = json.loads(app.restart_page  or "{}")
+    log.info("[ensure-files] app_id=%d downtime_page=%r update_page=%r restart_page=%r starting_page=%r",
+             app_id, app.downtime_page, app.update_page, app.restart_page, app.starting_page)
+    downtime_cfg = json.loads(app.downtime_page  or "{}")
+    update_cfg   = json.loads(app.update_page    or "{}")
+    restart_cfg  = json.loads(app.restart_page   or "{}")
+    starting_cfg = json.loads(app.starting_page  or "{}")
 
     downtime_html = nm.generate_maintenance_html(
         downtime_cfg.get("title")       or "Down for Maintenance",
@@ -108,7 +110,16 @@ def _ensure_maintenance_files(app: Application, app_id: int) -> None:
         "restart",
         logo_data=restart_cfg.get("logo_data"),
     )
-    ok, msg = nm.write_maintenance_files(app_id, downtime_html, update_html, restart_html)
+    starting_html = nm.generate_maintenance_html(
+        starting_cfg.get("title")       or "Starting\u2026",
+        starting_cfg.get("message")     or "The service is starting up. This only takes a moment.",
+        starting_cfg.get("color")       or "#388bfd",
+        starting_cfg.get("status_url"),
+        starting_cfg.get("custom_html"),
+        "starting",
+        logo_data=starting_cfg.get("logo_data"),
+    )
+    ok, msg = nm.write_maintenance_files(app_id, downtime_html, update_html, restart_html, starting_html)
     log.info("[ensure-files] write result ok=%s msg=%r", ok, msg)
 
 
@@ -524,11 +535,37 @@ async def start_app(app_id: int, db: AsyncSession = Depends(get_db)):
     if not app.start_command:
         raise HTTPException(400, "No start command configured")
 
+    start_started_at = asyncio.get_running_loop().time()
+
+    show_starting_page = (
+        app.nginx_enabled and app.domain and app.port
+        and not app.maintenance_mode and not app.update_mode
+    )
+    if show_starting_page:
+        _ensure_maintenance_files(app, app_id)
+        starting_cfg = nm.generate_config(
+            app.name, app.domain, app.port,
+            app.ssl_cert_path, app.ssl_key_path,
+            app_id=app_id, mode="starting",
+        )
+        nm.write_nginx_config(app.name, starting_cfg)
+        pm._push_line(app_id, "Starting page enabled while the app comes online.")
+
     env_vars = json.loads(app.env_vars or "{}")
     pid = pm.start_app(app_id, app.name, app.start_command, app.working_dir, env_vars)
 
     app.pid = pid
     app.status = "running"
+
+    if show_starting_page:
+        asyncio.create_task(_restore_nginx_after_restart(
+            app_id,
+            app.name, app.domain, app.port,
+            app.ssl_cert_path, app.ssl_key_path,
+            pid,
+            start_started_at,
+        ))
+
     await db.commit()
     return {"status": "running", "pid": pid}
 
@@ -713,6 +750,7 @@ def _app_to_dict(app: Application) -> dict:
         "downtime_page":    json.loads(app.downtime_page or "{}"),
         "update_page":      json.loads(app.update_page   or "{}"),
         "restart_page":     json.loads(app.restart_page  or "{}"),
+        "starting_page":    json.loads(app.starting_page or "{}"),
         "ssl_cert_path": app.ssl_cert_path,
         "ssl_key_path": app.ssl_key_path,
         "github_token": "***" if app.github_token else None,
@@ -729,9 +767,10 @@ async def get_maintenance_pages(app_id: int, db: AsyncSession = Depends(get_db))
     return {
         "maintenance_mode": app.maintenance_mode or False,
         "update_mode":      app.update_mode or False,
-        "downtime_page":    json.loads(app.downtime_page or "{}"),
-        "update_page":      json.loads(app.update_page   or "{}"),
-        "restart_page":     json.loads(app.restart_page  or "{}"),
+        "downtime_page":    json.loads(app.downtime_page  or "{}"),
+        "update_page":      json.loads(app.update_page    or "{}"),
+        "restart_page":     json.loads(app.restart_page   or "{}"),
+        "starting_page":    json.loads(app.starting_page  or "{}"),
     }
 
 
@@ -745,6 +784,7 @@ async def save_maintenance_pages(
     app.downtime_page = json.dumps(req.downtime_page.model_dump())
     app.update_page   = json.dumps(req.update_page.model_dump())
     app.restart_page  = json.dumps(req.restart_page.model_dump())
+    app.starting_page = json.dumps(req.starting_page.model_dump())
 
     downtime_html = nm.generate_maintenance_html(
         req.downtime_page.title   or "Down for Maintenance",
@@ -773,7 +813,16 @@ async def save_maintenance_pages(
         "restart",
         logo_data=req.restart_page.logo_data,
     )
-    ok, msg = nm.write_maintenance_files(app_id, downtime_html, update_html, restart_html)
+    starting_html = nm.generate_maintenance_html(
+        req.starting_page.title   or "Starting\u2026",
+        req.starting_page.message or "The service is starting up. This only takes a moment.",
+        req.starting_page.color   or "#388bfd",
+        req.starting_page.status_url,
+        req.starting_page.custom_html,
+        "starting",
+        logo_data=req.starting_page.logo_data,
+    )
+    ok, msg = nm.write_maintenance_files(app_id, downtime_html, update_html, restart_html, starting_html)
     if not ok:
         await db.commit()
         return {"ok": False, "message": msg}
@@ -862,16 +911,18 @@ async def preview_maintenance_page(
     """Return the rendered HTML for a maintenance page — opens directly in the browser."""
     from fastapi.responses import HTMLResponse
 
-    if page_type not in ("downtime", "update", "restart"):
-        raise HTTPException(400, "page_type must be 'downtime', 'update', or 'restart'")
+    if page_type not in ("downtime", "update", "restart", "starting"):
+        raise HTTPException(400, "page_type must be 'downtime', 'update', 'restart', or 'starting'")
 
     app = await _get_or_404(app_id, db)
     if page_type == "downtime":
         raw = app.downtime_page
     elif page_type == "update":
         raw = app.update_page
-    else:
+    elif page_type == "restart":
         raw = app.restart_page
+    else:
+        raw = app.starting_page
     cfg = json.loads(raw or "{}")
 
     if page_type == "downtime":
@@ -892,6 +943,16 @@ async def preview_maintenance_page(
             cfg.get("status_url"),
             cfg.get("custom_html"),
             "restart",
+            logo_data=cfg.get("logo_data"),
+        )
+    elif page_type == "starting":
+        html = nm.generate_maintenance_html(
+            cfg.get("title")      or "Starting\u2026",
+            cfg.get("message")    or "The service is starting up. This only takes a moment.",
+            cfg.get("color")      or "#388bfd",
+            cfg.get("status_url"),
+            cfg.get("custom_html"),
+            "starting",
             logo_data=cfg.get("logo_data"),
         )
     else:

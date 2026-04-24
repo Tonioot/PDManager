@@ -685,9 +685,10 @@ function initMaintenanceSettings() {
   if (noNginxWarn) noNginxWarn.style.display = hasNginx ? 'none' : '';
 
   // Disable open buttons when nginx not configured
-  document.getElementById('btn-open-downtime-modal').disabled = !hasNginx;
-  document.getElementById('btn-open-update-modal').disabled   = !hasNginx;
-  document.getElementById('btn-open-restart-modal').disabled  = !hasNginx;
+  document.getElementById('btn-open-downtime-modal').disabled  = !hasNginx;
+  document.getElementById('btn-open-update-modal').disabled    = !hasNginx;
+  document.getElementById('btn-open-restart-modal').disabled   = !hasNginx;
+  document.getElementById('btn-open-starting-modal').disabled  = !hasNginx;
 
   // Status badges
   _updateMaintBadges();
@@ -695,9 +696,10 @@ function initMaintenanceSettings() {
   if (!hasNginx) return;
 
   // Wire open buttons
-  document.getElementById('btn-open-downtime-modal').addEventListener('click', () => openMaintModal('downtime'));
-  document.getElementById('btn-open-update-modal').addEventListener('click',   () => openMaintModal('update'));
-  document.getElementById('btn-open-restart-modal').addEventListener('click',  () => openMaintModal('restart'));
+  document.getElementById('btn-open-downtime-modal').addEventListener('click',  () => openMaintModal('downtime'));
+  document.getElementById('btn-open-update-modal').addEventListener('click',    () => openMaintModal('update'));
+  document.getElementById('btn-open-restart-modal').addEventListener('click',   () => openMaintModal('restart'));
+  document.getElementById('btn-open-starting-modal').addEventListener('click',  () => openMaintModal('starting'));
 }
 
 function _openMaintModal_legacy(type) {
@@ -748,23 +750,28 @@ function _openMaintModal_legacy(type) {
 function openMaintModal(type) {
   _maintModalType = type;
   let cfg;
-  if (type === 'downtime')      cfg = app.downtime_page || {};
-  else if (type === 'restart')  cfg = app.restart_page  || {};
-  else                          cfg = app.update_page   || {};
-  const isDown    = type === 'downtime';
-  const isRestart = type === 'restart';
+  if (type === 'downtime')       cfg = app.downtime_page  || {};
+  else if (type === 'restart')   cfg = app.restart_page   || {};
+  else if (type === 'starting')  cfg = app.starting_page  || {};
+  else                           cfg = app.update_page    || {};
+  const isDown     = type === 'downtime';
+  const isRestart  = type === 'restart';
+  const isStarting = type === 'starting';
 
   const backdrop = document.getElementById('maint-modal-backdrop');
   backdrop.style.display = '';
 
-  document.getElementById('maint-modal-title').textContent = isDown ? 'Downtime Page' : isRestart ? 'Restart Page' : 'Update Page';
+  document.getElementById('maint-modal-title').textContent =
+    isDown ? 'Downtime Page' : isRestart ? 'Restart Page' : isStarting ? 'Starting Page' : 'Update Page';
   document.getElementById('maint-modal-sub').textContent = isDown
     ? 'Shown automatically on 502/503 (crash or stop) and when Downtime mode is on'
     : isRestart
     ? 'Shown automatically whenever the Restart button is pressed - clears when the app is back up'
+    : isStarting
+    ? 'Shown automatically whenever the Start button is pressed - clears when the app is online'
     : 'Shown when Update mode is manually enabled - ideal for planned deployments';
 
-  const color = cfg.color || (isDown ? '#f85149' : isRestart ? '#388bfd' : '#f0883e');
+  const color = cfg.color || (isDown ? '#f85149' : (isRestart || isStarting) ? '#388bfd' : '#f0883e');
   document.getElementById('maint-modal-title-input').value  = cfg.title   || '';
   document.getElementById('maint-modal-message').value      = cfg.message || '';
   document.getElementById('maint-modal-status-url').value   = cfg.status_url || '';
@@ -846,9 +853,10 @@ function _initMaintModal() {
 }
 
 function _updateMaintBadges() {
-  const downtimeBadge = document.getElementById('maint-downtime-badge');
-  const updateBadge   = document.getElementById('maint-update-badge');
-  const restartBadge  = document.getElementById('maint-restart-badge');
+  const downtimeBadge  = document.getElementById('maint-downtime-badge');
+  const updateBadge    = document.getElementById('maint-update-badge');
+  const restartBadge   = document.getElementById('maint-restart-badge');
+  const startingBadge  = document.getElementById('maint-starting-badge');
   if (!downtimeBadge || !updateBadge) return;
 
   const isMaint  = !!app.maintenance_mode;
@@ -863,6 +871,10 @@ function _updateMaintBadges() {
   if (restartBadge) {
     restartBadge.textContent = 'Auto';
     restartBadge.className   = 'maint-row-badge maint-badge--blue';
+  }
+  if (startingBadge) {
+    startingBadge.textContent = 'Auto';
+    startingBadge.className   = 'maint-row-badge maint-badge--blue';
   }
 }
 
@@ -903,13 +915,16 @@ async function saveMaintenancePage(type) {
   };
 
   // Build full settings payload (preserve the other page's existing data)
-  const currentDt = app.downtime_page || {};
-  const currentUp = app.update_page   || {};
-  const currentRe = app.restart_page  || {};
+  const currentDt = app.downtime_page  || {};
+  const currentUp = app.update_page    || {};
+  const currentRe = app.restart_page   || {};
+  const currentSt = app.starting_page  || {};
+  const _pick = (o) => ({ title: o.title, message: o.message, color: o.color, status_url: o.status_url, custom_html: o.custom_html, logo_data: o.logo_data });
   const payload = {
-    downtime_page: type === 'downtime' ? pageData : { title: currentDt.title, message: currentDt.message, color: currentDt.color, status_url: currentDt.status_url, custom_html: currentDt.custom_html, logo_data: currentDt.logo_data },
-    update_page:   type === 'update'   ? pageData : { title: currentUp.title, message: currentUp.message, color: currentUp.color, status_url: currentUp.status_url, custom_html: currentUp.custom_html, logo_data: currentUp.logo_data },
-    restart_page:  type === 'restart'  ? pageData : { title: currentRe.title, message: currentRe.message, color: currentRe.color, status_url: currentRe.status_url, custom_html: currentRe.custom_html, logo_data: currentRe.logo_data },
+    downtime_page:  type === 'downtime'  ? pageData : _pick(currentDt),
+    update_page:    type === 'update'    ? pageData : _pick(currentUp),
+    restart_page:   type === 'restart'   ? pageData : _pick(currentRe),
+    starting_page:  type === 'starting'  ? pageData : _pick(currentSt),
   };
 
   try {
@@ -917,7 +932,7 @@ async function saveMaintenancePage(type) {
     if (res.ok) {
       app = await api.getApp(APP_ID);
       _updateMaintBadges();
-      toast(`${type === 'downtime' ? 'Downtime' : type === 'restart' ? 'Restart' : 'Update'} page saved`);
+      toast(`${{ downtime: 'Downtime', restart: 'Restart', starting: 'Starting', update: 'Update' }[type]} page saved`);
       document.getElementById('maint-modal-backdrop').style.display = 'none';
     } else {
       toast(res.message || 'Save failed', 'error');

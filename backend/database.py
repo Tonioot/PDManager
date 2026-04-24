@@ -36,6 +36,7 @@ async def init_db():
             ("downtime_page",    "TEXT"),
             ("update_page",      "TEXT"),
             ("restart_page",     "TEXT"),
+            ("starting_page",    "TEXT"),
         ]:
             if col in existing_columns:
                 continue

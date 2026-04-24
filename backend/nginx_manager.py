@@ -37,6 +37,8 @@ def generate_maintenance_html(
         return _downtime_template(safe_title, safe_message, safe_color, safe_status_url, safe_logo_data)
     if page_type == "restart":
         return _restart_template(safe_title, safe_message, safe_color, safe_status_url, safe_logo_data)
+    if page_type == "starting":
+        return _starting_template(safe_title, safe_message, safe_color, safe_status_url, safe_logo_data)
     return _update_template(safe_title, safe_message, safe_color, safe_status_url, safe_logo_data)
 
 
@@ -177,6 +179,128 @@ def _restart_template(title: str, message: str, color: str, status_url: str = No
         f"""<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="{color}" stroke-width="1.5" stroke-linecap="round">
         <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/>
         <path d="M3 3v5h5"/>
+      </svg>""",
+        logo_data,
+    )
+
+    return f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="refresh" content="8">
+  <title>{title}</title>
+  <style>
+    *, *::before, *::after {{ box-sizing: border-box; margin: 0; padding: 0; }}
+    body {{
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Inter', sans-serif;
+      background: #f1f5f9;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 40px 20px;
+    }}
+    .card {{
+      background: #ffffff;
+      border: 1px solid #e2e8f0;
+      border-radius: 20px;
+      box-shadow: 0 1px 3px rgba(0,0,0,.04), 0 8px 32px rgba(0,0,0,.07);
+      padding: 52px 44px 44px;
+      max-width: 460px;
+      width: 100%;
+      text-align: center;
+    }}
+    .icon-ring {{
+      width: 72px; height: 72px;
+      border-radius: 50%;
+      background: color-mix(in srgb, {color} 8%, #fff);
+      border: 1.5px solid color-mix(in srgb, {color} 20%, transparent);
+      display: flex; align-items: center; justify-content: center;
+      margin: 0 auto 24px;
+      position: relative;
+    }}
+    .icon-glyph {{ display: inline-flex; align-items: center; justify-content: center; }}
+    .icon-glyph svg {{ display: block; }}
+    .icon-logo {{
+      width: 52px; height: 52px;
+      border-radius: 50%;
+      overflow: hidden;
+      display: flex; align-items: center; justify-content: center;
+      background: #ffffff;
+      box-shadow: inset 0 0 0 1px rgba(255,255,255,.7);
+    }}
+    .icon-logo img {{
+      width: 100%; height: 100%;
+      object-fit: contain;
+      padding: 8px;
+      background: #ffffff;
+    }}
+    .icon-ring::before {{
+      content: '';
+      position: absolute; inset: -5px; border-radius: 50%;
+      border: 2px solid color-mix(in srgb, {color} 15%, transparent);
+      border-top-color: {color};
+      animation: spin .9s linear infinite;
+    }}
+    @keyframes spin {{ to {{ transform: rotate(360deg); }} }}
+    .badge {{
+      display: inline-flex; align-items: center; gap: 7px;
+      background: color-mix(in srgb, {color} 8%, #fff);
+      border: 1px solid color-mix(in srgb, {color} 22%, transparent);
+      border-radius: 100px; padding: 5px 14px; margin-bottom: 22px;
+      font-size: 10.5px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase;
+      color: {color};
+    }}
+    .spinner {{
+      width: 8px; height: 8px; border-radius: 50%;
+      border: 2px solid color-mix(in srgb, {color} 22%, transparent);
+      border-top-color: {color};
+      animation: spin .7s linear infinite;
+    }}
+    h1 {{ font-size: 26px; font-weight: 700; color: #0f172a; letter-spacing: -.03em; line-height: 1.25; margin-bottom: 12px; }}
+    .msg {{ font-size: 15px; color: #64748b; line-height: 1.8; margin-bottom: 28px; }}
+    .track {{ background: #f1f5f9; border-radius: 100px; height: 3px; overflow: hidden; margin-bottom: 28px; }}
+    .bar {{ height: 100%; background: linear-gradient(90deg, transparent, {color}, transparent); animation: sweep 1.1s ease-in-out infinite; }}
+    @keyframes sweep {{ 0% {{ transform: translateX(-100%) scaleX(.5); }} 100% {{ transform: translateX(200%) scaleX(.5); }} }}
+    .status-link {{
+      display: inline-flex; align-items: center; gap: 7px;
+      font-size: 13px; font-weight: 500; color: {color};
+      text-decoration: none; padding: 9px 20px;
+      border: 1px solid color-mix(in srgb, {color} 30%, transparent);
+      border-radius: 10px;
+      background: color-mix(in srgb, {color} 5%, transparent);
+      transition: background .15s;
+    }}
+    .status-link:hover {{ background: color-mix(in srgb, {color} 12%, transparent); }}
+    .footer {{ margin-top: 28px; font-size: 11px; color: #94a3b8; }}
+  </style>
+</head>
+<body>
+  <div class="card">
+    {visual_block}
+    <h1>{title}</h1>
+    <p class="msg">{message}</p>
+    <div class="track"><div class="bar"></div></div>
+    {status_btn}
+    <div class="footer">Page auto-refreshes every 8 seconds.</div>
+  </div>
+</body>
+</html>
+"""
+
+
+def _starting_template(title: str, message: str, color: str, status_url: str = None, logo_data: str = None) -> str:
+    status_btn = f"""
+    <a class="status-link" href="{status_url}" target="_blank" rel="noopener noreferrer">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="22 12 16 12 13 21 11 3 8 12 2 12"/></svg>
+      View status page
+      <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="7" y1="17" x2="17" y2="7"/><polyline points="7 7 17 7 17 17"/></svg>
+    </a>""" if status_url else ""
+    visual_block = _render_visual_block(
+        color,
+        f"""<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="{color}" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+        <polygon points="5 3 19 12 5 21 5 3"/>
       </svg>""",
         logo_data,
     )
@@ -463,6 +587,8 @@ def generate_config(
       'normal'       -  proxy to app; 502/503 automatically serve downtime.html
       'maintenance'  -  serve downtime.html statically (app bypassed)
       'update'       -  serve update.html statically (app bypassed)
+      'restart'      -  serve restart.html statically (app bypassed)
+      'starting'     -  serve starting.html statically (app bypassed)
     """
     maint_root = f"{MAINTENANCE_DIR}/{app_id}" if app_id else f"{MAINTENANCE_DIR}/0"
 
@@ -472,6 +598,8 @@ def generate_config(
         return _static_page_config(domain, maint_root, "update.html", ssl_cert, ssl_key)
     if mode == "restart":
         return _static_page_config(domain, maint_root, "restart.html", ssl_cert, ssl_key)
+    if mode == "starting":
+        return _static_page_config(domain, maint_root, "starting.html", ssl_cert, ssl_key)
     return _proxy_config(domain, port, maint_root, ssl_cert, ssl_key)
 
 
@@ -594,8 +722,12 @@ def config_uses_restart_page(content: str) -> bool:
     return "try_files /restart.html" in (content or "")
 
 
-def write_maintenance_files(app_id: int, downtime_html: str, update_html: str, restart_html: str = None) -> tuple[bool, str]:
-    """Write downtime.html, update.html (and optionally restart.html) to /var/www/pdmanager/maintenance/{app_id}/."""
+def config_uses_starting_page(content: str) -> bool:
+    return "try_files /starting.html" in (content or "")
+
+
+def write_maintenance_files(app_id: int, downtime_html: str, update_html: str, restart_html: str = None, starting_html: str = None) -> tuple[bool, str]:
+    """Write downtime.html, update.html (and optionally restart.html, starting.html) to /var/www/pdmanager/maintenance/{app_id}/."""
     app_dir = os.path.join(MAINTENANCE_DIR, str(app_id))
     log.info("[maint-files] writing to %s", app_dir)
     try:
@@ -607,6 +739,8 @@ def write_maintenance_files(app_id: int, downtime_html: str, update_html: str, r
         files = [("downtime.html", downtime_html), ("update.html", update_html)]
         if restart_html is not None:
             files.append(("restart.html", restart_html))
+        if starting_html is not None:
+            files.append(("starting.html", starting_html))
 
         for filename, content in files:
             path = os.path.join(app_dir, filename)
