@@ -481,13 +481,14 @@ def _proxy_config(domain: str, port: int, maint_root: str, ssl_cert: str = None,
     # Named locations don't support try_files, which caused the file to not be served.
     server_content = f"""\
     # Auto-serve downtime page when upstream returns 502/503/504.
-    # =200 overrides the status so Cloudflare (and other proxies) don't intercept it.
-    error_page 502 503 504 =200 /_pdm_maintenance;
+    error_page 502 503 504 =503 /_pdm_maintenance;
     location = /_pdm_maintenance {{
         internal;
         root {maint_root};
-        try_files /downtime.html =200;
+        try_files /downtime.html =503;
         default_type text/html;
+        add_header Cache-Control "no-store, no-cache, must-revalidate" always;
+        add_header Pragma "no-cache" always;
     }}
 
     location / {{
@@ -537,9 +538,10 @@ def _static_page_config(domain: str, maint_root: str, filename: str, ssl_cert: s
     root {maint_root};
 
     location / {{
-        # =200 fallback: never let Cloudflare intercept with its own error page
-        try_files /{filename} =200;
+        try_files /{filename} =503;
         default_type text/html;
+        add_header Cache-Control "no-store, no-cache, must-revalidate" always;
+        add_header Pragma "no-cache" always;
     }}"""
 
     if ssl_cert and ssl_key:
@@ -581,7 +583,7 @@ def get_config_path(app_name: str) -> str:
 
 
 def config_uses_restart_page(content: str) -> bool:
-    return "try_files /restart.html =200;" in (content or "")
+    return "try_files /restart.html" in (content or "")
 
 
 def write_maintenance_files(app_id: int, downtime_html: str, update_html: str, restart_html: str = None) -> tuple[bool, str]:
