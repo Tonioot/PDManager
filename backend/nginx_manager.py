@@ -533,16 +533,24 @@ server {{
 
 
 def _static_page_config(domain: str, maint_root: str, filename: str, ssl_cert: str = None, ssl_key: str = None) -> str:
-    # Serve a single static HTML file â€” works even when both app and PDManager are offline.
-    server_content = f"""\
+    # Serve a single static HTML file with a real 503 status.
+    # error_page 503 points to an internal location that reads the file;
+    # the outer location just triggers the 503 unconditionally.
+    server_content = f”””\
     root {maint_root};
 
-    location / {{
+    error_page 503 /_pdm_static;
+    location = /_pdm_static {{
+        internal;
         try_files /{filename} =503;
         default_type text/html;
-        add_header Cache-Control "no-store, no-cache, must-revalidate" always;
-        add_header Pragma "no-cache" always;
-    }}"""
+        add_header Cache-Control “no-store, no-cache, must-revalidate” always;
+        add_header Pragma “no-cache” always;
+    }}
+
+    location / {{
+        return 503;
+    }}”””
 
     if ssl_cert and ssl_key:
         return f"""server {{
