@@ -70,11 +70,10 @@ def save_hashed_password(hashed: str) -> None:
 
 
 # ── JWT helpers ───────────────────────────────────────────────────────────────
-def create_access_token(username: str, role: str = "admin") -> str:
+def create_access_token() -> str:
     expire = datetime.now(timezone.utc) + timedelta(seconds=TOKEN_EXPIRE_SECONDS)
     payload = {
-        "sub": username,
-        "role": role,
+        "sub": "admin",
         "exp": expire,
         "iat": datetime.now(timezone.utc),
     }
@@ -91,21 +90,7 @@ def _decode_payload(token: str) -> Optional[dict]:
 def decode_token(token: str) -> bool:
     """Return True if the token is valid and not expired."""
     payload = _decode_payload(token)
-    return payload is not None and bool(payload.get("sub"))
-
-
-def get_token_username(token: str) -> Optional[str]:
-    payload = _decode_payload(token)
-    if payload is None:
-        return None
-    return payload.get("sub")
-
-
-def get_token_role(token: str) -> Optional[str]:
-    payload = _decode_payload(token)
-    if payload is None:
-        return None
-    return payload.get("role", "viewer")
+    return payload is not None and payload.get("sub") == "admin"
 
 
 def get_token_expires_in(token: str) -> Optional[int]:

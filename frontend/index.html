@@ -94,10 +94,6 @@
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
         Change Password
       </button>
-      <button class="sidebar-footer-btn" id="btn-manage-users" style="display:none">
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
-        Manage Users
-      </button>
       <button class="sidebar-footer-btn sidebar-footer-btn--danger" id="btn-logout">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
         Sign out
@@ -208,39 +204,6 @@
 </div>
 
 <!-- Cloudbase nginx modal -->
-<!-- Manage users modal -->
-<div id="users-modal" style="display:none" class="dialog-backdrop">
-  <div class="dialog users-dialog">
-    <div class="dialog-title">Manage Users</div>
-    <form id="users-form" onsubmit="return false;">
-    <div class="dialog-body users-modal-body">
-      <div id="users-list" class="users-list"></div>
-      <hr style="border:none;border-top:1px solid var(--border);margin:0" />
-      <div class="users-section-title">Add User</div>
-      <div style="display:flex;flex-direction:column;gap:10px">
-        <div class="users-form-grid">
-          <input class="input" id="new-user-name" placeholder="Username" />
-          <select class="input" id="new-user-role" style="cursor:pointer">
-            <option value="viewer">Viewer</option>
-            <option value="admin">Admin</option>
-          </select>
-        </div>
-        <input class="input input-mono" id="new-user-pwd" type="password" placeholder="Password (min 8 chars)" />
-        <div id="users-error" style="display:none;font-size:12px;padding:8px 10px;border-radius:6px;background:var(--red-bg);border:1px solid var(--red-border);color:var(--red)"></div>
-        <button type="button" class="btn btn-primary" id="btn-add-user" style="align-self:flex-start">
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-          Add User
-        </button>
-      </div>
-    </div>
-    <div class="dialog-actions">
-      <button type="button" class="btn btn-secondary" id="users-close">Close</button>
-    </div>
-    </form>
-  </div>
-</div>
-
-<!-- Cloudbase nginx modal -->
 <div id="pdm-nginx-modal" style="display:none" class="dialog-backdrop">
   <div class="dialog" style="max-width:500px;width:90%">
     <div class="dialog-title">Cloudbase — Domain &amp; SSL</div>
@@ -295,19 +258,14 @@
   import { initSidebar } from './js/sidebar.js';
 
   // Guard: redirect to login if not authenticated
-  let _authInfo;
-  try { _authInfo = await api.checkAuth(); } catch { location.href = '/login.html'; }
-  const isAdmin = !!(_authInfo && _authInfo.role === 'admin');
-  if (isAdmin) document.getElementById('btn-manage-users').style.display = '';
-  else {
-    document.getElementById('btn-manage-users').remove();
-    const modal = document.getElementById('users-modal');
-    if (modal) modal.remove();
+  try {
+    await api.checkAuth();
+  } catch {
+    location.href = '/login.html';
   }
 
-  if (_authInfo) {
-    initDashboard();
-    initSidebar();
+  initDashboard();
+  initSidebar();
 
   document.getElementById('btn-logout').addEventListener('click', async () => {
     await api.logout().catch(() => {});
@@ -345,121 +303,6 @@
       btn.disabled = false;
     }
   });
-
-  if (isAdmin) {
-    // Fallback to direct fetch if browser still has an older cached api.js object.
-    const parseError = async res => {
-      const data = await res.json().catch(() => ({}));
-      throw new Error(data.detail || `HTTP ${res.status}`);
-    };
-    const userApi = {
-      list: () => (typeof api.listUsers === 'function'
-        ? api.listUsers()
-        : fetch('/api/auth/users', { credentials: 'same-origin' }).then(async res => {
-            if (!res.ok) await parseError(res);
-            return res.json().catch(() => []);
-          })),
-      create: payload => (typeof api.createUser === 'function'
-        ? api.createUser(payload)
-        : fetch('/api/auth/users', {
-            method: 'POST',
-            credentials: 'same-origin',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload)
-          }).then(async res => {
-            if (!res.ok) await parseError(res);
-            return res.json().catch(() => ({}));
-          })),
-      remove: id => (typeof api.deleteUser === 'function'
-        ? api.deleteUser(id)
-        : fetch(`/api/auth/users/${id}`, {
-            method: 'DELETE',
-            credentials: 'same-origin'
-          }).then(async res => {
-            if (!res.ok) await parseError(res);
-            return res.json().catch(() => ({}));
-          }))
-    };
-
-    const usersModal = document.getElementById('users-modal');
-    const usersError = document.getElementById('users-error');
-    const usersList = document.getElementById('users-list');
-
-    async function renderUsersList() {
-      usersList.innerHTML = '<div class="users-list-empty">Loading users...</div>';
-      try {
-        const users = await userApi.list();
-        if (!users.length) {
-          usersList.innerHTML = '<div class="users-list-empty">No users configured yet.</div>';
-          return;
-        }
-        usersList.innerHTML = users.map(u => {
-          const self = u.username === _authInfo.username;
-          return `<div class="user-row">
-            <div class="user-name-wrap">
-              <span class="user-initial">${(u.username || '?').slice(0,1).toUpperCase()}</span>
-              <div class="user-name" title="${u.username}">${u.username}</div>
-              ${self ? '<span class="user-self">(you)</span>' : ''}
-            </div>
-            <span class="role-pill ${u.role === 'admin' ? 'admin' : ''}">${u.role}</span>
-            ${self ? '<span></span>' : `<button class="btn-user-delete" data-uid="${u.id}" title="Delete ${u.username}">
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
-            </button>`}
-          </div>`;
-        }).join('');
-
-        usersList.querySelectorAll('.btn-user-delete').forEach(btn => {
-          btn.addEventListener('click', async () => {
-            if (!confirm('Delete this user?')) return;
-            usersError.style.display = 'none';
-            try {
-              await userApi.remove(btn.dataset.uid);
-              await renderUsersList();
-            } catch (e) {
-              usersError.textContent = e.message;
-              usersError.style.display = 'block';
-            }
-          });
-        });
-      } catch (e) {
-        usersList.innerHTML = `<div class="users-list-empty" style="color:var(--red);border-color:var(--red-border);background:var(--red-bg)">${e.message}</div>`;
-      }
-    }
-
-    document.getElementById('btn-manage-users').addEventListener('click', () => {
-      document.getElementById('new-user-name').value = '';
-      document.getElementById('new-user-pwd').value = '';
-      document.getElementById('new-user-role').value = 'viewer';
-      usersError.style.display = 'none';
-      usersModal.style.display = 'flex';
-      renderUsersList();
-    });
-    document.getElementById('users-close').addEventListener('click', () => { usersModal.style.display = 'none'; });
-    usersModal.addEventListener('click', e => { if (e.target === usersModal) usersModal.style.display = 'none'; });
-    document.getElementById('btn-add-user').addEventListener('click', async () => {
-      usersError.style.display = 'none';
-      const username = document.getElementById('new-user-name').value.trim();
-      const password = document.getElementById('new-user-pwd').value;
-      const role = document.getElementById('new-user-role').value;
-      if (!username) { usersError.textContent = 'Username is required.'; usersError.style.display = 'block'; return; }
-      if (password.length < 8) { usersError.textContent = 'Password must be at least 8 characters.'; usersError.style.display = 'block'; return; }
-      const addBtn = document.getElementById('btn-add-user');
-      addBtn.disabled = true;
-      try {
-        await userApi.create({ username, password, role });
-        document.getElementById('new-user-name').value = '';
-        document.getElementById('new-user-pwd').value = '';
-        document.getElementById('new-user-role').value = 'viewer';
-        await renderUsersList();
-      } catch (e) {
-        usersError.textContent = e.message;
-        usersError.style.display = 'block';
-      } finally {
-        addBtn.disabled = false;
-      }
-    });
-  }
-  }
 </script>
 </body>
 </html>

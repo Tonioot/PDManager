@@ -454,26 +454,11 @@ cmd_password() {
     fi
     cd "$BACKEND_DIR"
     "$VENV_PATH/bin/python3" - <<PYEOF
-import sys, asyncio
+import sys
 sys.path.insert(0, '.')
-from database import AsyncSessionLocal, init_db
-from models import User
-from sqlalchemy import select
 import auth
-
-async def run():
-    await init_db()
-    async with AsyncSessionLocal() as db:
-        result = await db.execute(select(User).where(User.username == 'admin'))
-        user = result.scalars().first()
-        if not user:
-            print('No admin user found')
-            return
-        user.hashed_password = auth.hash_password('$new_pass')
-        await db.commit()
-    print('Password updated')
-
-asyncio.run(run())
+auth.save_hashed_password(auth.hash_password('$new_pass'))
+print('Password updated')
 PYEOF
     success "Admin password updated"
 }

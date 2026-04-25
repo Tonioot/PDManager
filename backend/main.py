@@ -9,7 +9,7 @@ from typing import Optional
 
 import psutil
 
-from fastapi import Depends, FastAPI, File, HTTPException, Request, UploadFile
+from fastapi import FastAPI, File, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
@@ -18,7 +18,7 @@ from sqlalchemy import select
 from starlette.middleware.base import BaseHTTPMiddleware
 
 from database import AsyncSessionLocal, init_db
-from models import Application, User
+from models import Application
 from routers import applications, files, logs, stats
 import auth
 import nginx_manager as nm
@@ -274,18 +274,7 @@ app.add_middleware(
 
 # ── Auth endpoints (public) ───────────────────────────────────────────────────
 class LoginRequest(BaseModel):
-    username: str
     password: str
-
-
-def _require_admin(request: Request) -> str:
-    """Dependency: returns username if logged-in user has admin role, else 403."""
-    token = request.cookies.get(_COOKIE_NAME)
-    if not token or not auth.decode_token(token):
-        raise HTTPException(status_code=401, detail="Not authenticated")
-    if auth.get_token_role(token) != "admin":
-        raise HTTPException(status_code=403, detail="Admin access required")
-    return auth.get_token_username(token)
 
 
 @app.get("/api/health")
@@ -298,21 +287,18 @@ async def auth_check(request: Request):
     token = request.cookies.get(_COOKIE_NAME)
     if not token or not auth.decode_token(token):
         raise HTTPException(status_code=401, detail="Not authenticated")
-    return {"authenticated": True, "username": auth.get_token_username(token), "role": auth.get_token_role(token)}
+    return {"authenticated": True}
 
 
 @app.post("/api/auth/login")
 async def login(req: LoginRequest, request: Request, response: Response):
     auth._check_rate_limit(request.client.host if request.client else "unknown")
-    async with AsyncSessionLocal() as db:
-        from sqlalchemy import select as _sel
-        result = await db.execute(_sel(User).where(User.username == req.username))
-        user = result.scalars().first()
-    if not user or not auth.verify_password(req.password, user.hashed_password):
-        raise HTTPException(status_code=401, detail="Invalid username or password")
-    token = auth.create_access_token(user.username, user.role)
+    hashed = auth.load_hashed_password()
+    if not hashed or not auth.verify_password(req.password, hashed):
+        raise HTTPException(status_code=401, detail="Invalid password")
+    token = auth.create_access_token()
     response.set_cookie(key=_COOKIE_NAME, value=token, max_age=auth.TOKEN_EXPIRE_SECONDS, **_COOKIE_OPTS)
-    return {"ok": True, "username": user.username, "role": user.role, "expires_in": auth.TOKEN_EXPIRE_SECONDS}
+    return {"ok": True, "expires_in": auth.TOKEN_EXPIRE_SECONDS}
 
 
 @app.get("/api/auth/session")
@@ -343,66 +329,7 @@ async def change_password(req: ChangePasswordRequest, request: Request):
         raise HTTPException(status_code=401, detail="Not authenticated")
     if len(req.password) < 8:
         raise HTTPException(status_code=400, detail="Password must be at least 8 characters")
-    username = auth.get_token_username(token)
-    async with AsyncSessionLocal() as db:
-        from sqlalchemy import select as _sel
-        result = await db.execute(_sel(User).where(User.username == username))
-        user = result.scalars().first()
-        if not user:
-            raise HTTPException(status_code=404, detail="User not found")
-        user.hashed_password = auth.hash_password(req.password)
-        await db.commit()
-    return {"ok": True}
-
-
-# ── User management endpoints (admin only) ───────────────────────────────────
-class CreateUserRequest(BaseModel):
-    username: str
-    password: str
-    role: str = "viewer"  # admin | viewer
-
-
-@app.get("/api/auth/users")
-async def list_users(request: Request, _: str = Depends(_require_admin)):
-    async with AsyncSessionLocal() as db:
-        from sqlalchemy import select as _sel
-        result = await db.execute(_sel(User))
-        users = result.scalars().all()
-    return [{"id": u.id, "username": u.username, "role": u.role, "created_at": u.created_at} for u in users]
-
-
-@app.post("/api/auth/users")
-async def create_user(req: CreateUserRequest, _: str = Depends(_require_admin)):
-    if len(req.username) < 2:
-        raise HTTPException(status_code=400, detail="Username must be at least 2 characters")
-    if len(req.password) < 8:
-        raise HTTPException(status_code=400, detail="Password must be at least 8 characters")
-    if req.role not in ("admin", "viewer"):
-        raise HTTPException(status_code=400, detail="Role must be 'admin' or 'viewer'")
-    async with AsyncSessionLocal() as db:
-        from sqlalchemy import select as _sel
-        existing = await db.execute(_sel(User).where(User.username == req.username))
-        if existing.scalars().first():
-            raise HTTPException(status_code=409, detail="Username already exists")
-        user = User(username=req.username, hashed_password=auth.hash_password(req.password), role=req.role)
-        db.add(user)
-        await db.commit()
-        await db.refresh(user)
-    return {"ok": True, "id": user.id, "username": user.username, "role": user.role}
-
-
-@app.delete("/api/auth/users/{user_id}")
-async def delete_user(user_id: int, request: Request, admin_username: str = Depends(_require_admin)):
-    async with AsyncSessionLocal() as db:
-        from sqlalchemy import select as _sel
-        result = await db.execute(_sel(User).where(User.id == user_id))
-        user = result.scalars().first()
-        if not user:
-            raise HTTPException(status_code=404, detail="User not found")
-        if user.username == admin_username:
-            raise HTTPException(status_code=400, detail="Cannot delete your own account")
-        await db.delete(user)
-        await db.commit()
+    auth.save_hashed_password(auth.hash_password(req.password))
     return {"ok": True}
 
 

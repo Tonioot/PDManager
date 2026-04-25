@@ -21,9 +21,10 @@ async def get_db():
 
 
 async def init_db():
-    from models import Application, User
+    from models import Application
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+        await conn.exec_driver_sql("DROP TABLE IF EXISTS users")
         # Migrate existing DBs: add columns introduced after initial schema.
         result = await conn.exec_driver_sql("PRAGMA table_info(applications)")
         existing_columns = {row[1] for row in result.fetchall()}
@@ -45,21 +46,3 @@ async def init_db():
             await conn.exec_driver_sql(
                 f"ALTER TABLE applications ADD COLUMN {col} {definition}"
             )
-
-    # Seed admin user from credentials file if no users exist yet
-    async with AsyncSessionLocal() as session:
-        from sqlalchemy import select as _select
-        from models import User
-        result = await session.execute(_select(User))
-        if result.scalars().first() is None:
-            creds_file = os.path.join(DATA_DIR, "credentials")
-            if os.path.exists(creds_file):
-                with open(creds_file) as f:
-                    hashed = f.read().strip()
-            else:
-                # No credentials yet — generate a placeholder; start.sh will set real password
-                import bcrypt
-                hashed = bcrypt.hashpw(b"changeme", bcrypt.gensalt()).decode()
-            admin = User(username="admin", hashed_password=hashed, role="admin")
-            session.add(admin)
-            await session.commit()
