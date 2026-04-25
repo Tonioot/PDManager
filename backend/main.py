@@ -424,9 +424,9 @@ if os.path.isdir(FRONTEND_DIR):
     app.mount("/css", StaticFiles(directory=os.path.join(FRONTEND_DIR, "css")), name="css")
     app.mount("/js",  StaticFiles(directory=os.path.join(FRONTEND_DIR, "js")),  name="js")
 
-    @app.get("/favicon.svg", include_in_schema=False)
+    @app.get("/favicon.png", include_in_schema=False)
     async def favicon():
-        return FileResponse(os.path.join(FRONTEND_DIR, "favicon.svg"), media_type="image/svg+xml")
+        return FileResponse(os.path.join(FRONTEND_DIR, "cloudbase.png"), media_type="image/svg+xml")
 
     @app.get("/cloudbase.png", include_in_schema=False)
     async def logo():
