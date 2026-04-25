@@ -334,15 +334,15 @@ async def change_password(req: ChangePasswordRequest, request: Request):
 
 
 # ── System endpoints ──────────────────────────────────────────────────────────
-class PDManagerNginxRequest(BaseModel):
+class CloudbaseNginxRequest(BaseModel):
     domain: str
     ssl_cert_path: Optional[str] = None
     ssl_key_path: Optional[str] = None
 
 
 @app.get("/api/system/nginx-config")
-async def get_pdmanager_nginx():
-    config_path = os.path.join(nm.NGINX_SITES_DIR, "pdmanager")
+async def get_cloudbase_nginx():
+    config_path = os.path.join(nm.NGINX_SITES_DIR, "cloudbase")
     if not os.path.exists(config_path):
         return {"exists": False, "content": None}
     with open(config_path) as f:
@@ -351,9 +351,9 @@ async def get_pdmanager_nginx():
 
 
 @app.post("/api/system/nginx-config")
-async def apply_pdmanager_nginx(req: PDManagerNginxRequest):
-    config = nm.generate_config("pdmanager", req.domain, PORT, req.ssl_cert_path, req.ssl_key_path)
-    ok, msg = nm.write_nginx_config("pdmanager", config)
+async def apply_cloudbase_nginx(req: CloudbaseNginxRequest):
+    config = nm.generate_config("cloudbase", req.domain, PORT, req.ssl_cert_path, req.ssl_key_path)
+    ok, msg = nm.write_nginx_config("cloudbase", config)
     return {"ok": ok, "message": msg, "preview": config}
 
 
@@ -404,7 +404,7 @@ async def delete_github_token(token_id: str):
 
 @app.get("/api/system/debug-log")
 async def get_debug_log(lines: int = 200):
-    """Return the last N lines of the PDManager debug log."""
+    """Return the last N lines of the Cloudbase debug log."""
     try:
         with open(pm.DEBUG_LOG_PATH) as f:
             all_lines = f.readlines()

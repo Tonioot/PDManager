@@ -6,7 +6,7 @@ log = logging.getLogger("pdm.nginx")
 
 NGINX_SITES_DIR = "/etc/nginx/sites-available"
 NGINX_ENABLED_DIR = "/etc/nginx/sites-enabled"
-MAINTENANCE_DIR = "/var/www/pdmanager/maintenance"
+MAINTENANCE_DIR = "/var/www/cloudbase/maintenance"
 
 
 # â"€â"€ Maintenance page HTML generation â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€

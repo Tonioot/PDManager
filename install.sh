@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-set -e
+set -euo pipefail
 
 BOLD='\033[1m'
 BLUE='\033[0;34m'
@@ -8,29 +8,54 @@ YELLOW='\033[0;33m'
 RED='\033[0;31m'
 RESET='\033[0m'
 
-info()    { echo -e "${BLUE}[INFO]${RESET} $1"; }
-success() { echo -e "${GREEN}[OK]${RESET}   $1"; }
-warn()    { echo -e "${YELLOW}[WARN]${RESET} $1"; }
-err()     { echo -e "${RED}[ERR]${RESET}  $1"; }
-
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 APP_NAME="Cloudbase"
 CLI_NAME="cloudbase"
 LEGACY_CLI_NAME="pdmanager"
 SERVICE_NAME="cloudbase"
+LOG_DIR="$HOME/.pdmanager/logs"
+LOG_FILE="$LOG_DIR/cloudbase-install.log"
+
+mkdir -p "$LOG_DIR"
+
+timestamp() { date '+%Y-%m-%d %H:%M:%S'; }
+
+log_line() {
+  local level="$1"
+  local color="$2"
+  local message="$3"
+  printf '[%s] [%s] %s\n' "$(timestamp)" "$level" "$message" >> "$LOG_FILE"
+  printf '%b[%s] [%s]%b %s\n' "$color" "$(timestamp)" "$level" "$RESET" "$message"
+}
+
+info()    { log_line "INFO" "$BLUE" "$1"; }
+success() { log_line "OK"   "$GREEN" "$1"; }
+warn()    { log_line "WARN" "$YELLOW" "$1"; }
+err()     { log_line "ERR"  "$RED" "$1"; }
+
+banner() {
+  cat <<'EOF'
+_________ .__                   .______.                         
+\_   ___ \|  |   ____  __ __  __| _/\_ |__ _____    ______ ____  
+/    \  \/|  |  /  _ \|  |  \/ __ |  | __ \\__  \  /  ___// __ \ 
+\     \___|  |_(  <_> )  |  / /_/ |  | \_\ \/ __ \_\___ \\  ___/ 
+ \______  /____/\____/|____/\____ |  |___  (____  /____  >\___  >
+        \/                       \/      \/     \/     \/     \/ 
+EOF
+}
 
 usage() {
   cat <<'EOF'
 Usage: ./install.sh
 
-Cloudbase always installs the full Linux stack:
+Cloudbase installs the full production stack by default:
   - system packages
   - nginx
   - Python virtual environment
   - /usr/local/bin/cloudbase CLI
   - systemd service with boot autostart
 
-Supported legacy flags (now optional and ignored):
+Supported legacy flags (accepted for compatibility):
   -y, --yes, --with-nginx, --with-service, --with-cli
   -h, --help
 EOF
@@ -39,7 +64,7 @@ EOF
 while [[ $# -gt 0 ]]; do
   case "$1" in
     -y|--yes|--with-nginx|--with-service|--with-cli)
-      warn "Ignoring legacy flag '$1' - Cloudbase install is now always full-stack."
+      warn "Ignoring legacy flag '$1' - Cloudbase install now always performs the full setup."
       ;;
     -h|--help)
       usage
@@ -55,10 +80,12 @@ while [[ $# -gt 0 ]]; do
   shift
 done
 
-echo -e "\n${BOLD}${APP_NAME} — Installer${RESET}\n"
-info "Running full Cloudbase installation..."
+printf '\n%b' "$BOLD"
+banner
+printf '%b\n' "$RESET"
+info "Starting full Cloudbase installation"
+info "Installer log: $LOG_FILE"
 
-# ── Detect package manager ────────────────────────────────────────────────────
 PKG_MGR=""
 if   command -v apt-get &>/dev/null; then PKG_MGR="apt"
 elif command -v dnf     &>/dev/null; then PKG_MGR="dnf"
@@ -73,7 +100,7 @@ ensure_pkg_index() {
   fi
   case "$PKG_MGR" in
     apt)
-      info "Refreshing apt package index…"
+      info "Refreshing apt package index"
       sudo apt-get update
       ;;
   esac
@@ -81,28 +108,34 @@ ensure_pkg_index() {
 }
 
 install_pkg() {
-  # usage: install_pkg <display-name> <apt-pkg> <dnf-pkg> <pacman-pkg> <zypper-pkg>
   local name="$1" apt_pkg="$2" dnf_pkg="$3" pac_pkg="$4" zy_pkg="$5"
-  info "Installing $name…"
+  info "Installing $name"
   case "$PKG_MGR" in
     apt)
       ensure_pkg_index
       sudo apt-get install -y $apt_pkg
       ;;
-    dnf)    sudo dnf install -y "$dnf_pkg" ;;
-    yum)    sudo yum install -y "$dnf_pkg" ;;
-    pacman) sudo pacman -S --noconfirm "$pac_pkg" ;;
-    zypper) sudo zypper install -y "$zy_pkg" ;;
+    dnf)
+      sudo dnf install -y "$dnf_pkg"
+      ;;
+    yum)
+      sudo yum install -y "$dnf_pkg"
+      ;;
+    pacman)
+      sudo pacman -S --noconfirm "$pac_pkg"
+      ;;
+    zypper)
+      sudo zypper install -y "$zy_pkg"
+      ;;
     *)
-      err "$name not found and no supported package manager detected."
-      err "Please install $name manually and re-run this script."
+      err "$name not found and no supported package manager detected"
+      err "Install $name manually and re-run this script"
       exit 1
       ;;
   esac
   success "$name installed"
 }
 
-# ── Python ────────────────────────────────────────────────────────────────────
 if command -v python3 &>/dev/null; then
   success "Python found: $(python3 --version)"
 else
@@ -112,9 +145,8 @@ else
                           "python3 python3-pip"
 fi
 
-# python3-venv is a separate package on Debian/Ubuntu
 if [[ "$PKG_MGR" == "apt" ]] && ! python3 -m venv --help &>/dev/null 2>&1; then
-  info "Installing python3-venv…"
+  info "Installing python3-venv"
   ensure_pkg_index
   sudo apt-get install -y python3-venv
 fi
@@ -125,22 +157,28 @@ else
   install_pkg "lsof" "lsof" "lsof" "lsof" "lsof"
 fi
 
-# ── Git ───────────────────────────────────────────────────────────────────────
 if command -v git &>/dev/null; then
   success "Git found: $(git --version)"
 else
   install_pkg "Git" "git" "git" "git" "git"
 fi
 
-# ── Nginx ─────────────────────────────────────────────────────────────────────
 if command -v nginx &>/dev/null; then
   success "Nginx found"
 else
   install_pkg "Nginx" "nginx" "nginx" "nginx" "nginx"
 fi
 
-# ── Python venv & deps ────────────────────────────────────────────────────────
-info "Setting up Python virtual environment…"
+info "Creating Cloudbase data directories"
+mkdir -p "$HOME/.pdmanager/apps" "$HOME/.pdmanager/logs" "$HOME/.pdmanager/certs"
+success "Data directories ready at ~/.pdmanager"
+
+info "Preparing Cloudbase maintenance directory"
+sudo mkdir -p /var/www/cloudbase/maintenance
+sudo chmod 755 /var/www/cloudbase/maintenance
+success "Maintenance directory ready at /var/www/cloudbase/maintenance"
+
+info "Building Python virtual environment"
 cd "$SCRIPT_DIR/backend"
 python3 -m venv venv
 source venv/bin/activate
@@ -148,7 +186,7 @@ pip install --quiet --upgrade pip
 pip install --quiet -r requirements.txt
 success "Python dependencies installed"
 
-info "Installing ${CLI_NAME} CLI wrapper…"
+info "Installing Cloudbase CLI wrapper"
 sudo tee "/usr/local/bin/${CLI_NAME}" > /dev/null <<EOF
 #!/usr/bin/env bash
 exec /bin/bash "$SCRIPT_DIR/start.sh" "\$@"
@@ -159,27 +197,13 @@ sudo tee "/usr/local/bin/${LEGACY_CLI_NAME}" > /dev/null <<EOF
 exec /usr/local/bin/${CLI_NAME} "\$@"
 EOF
 sudo chmod 755 "/usr/local/bin/${LEGACY_CLI_NAME}"
-success "CLI installed — run: ${CLI_NAME} up"
+success "CLI installed at /usr/local/bin/${CLI_NAME}"
 
-# ── Data dirs ─────────────────────────────────────────────────────────────────
-mkdir -p ~/.pdmanager/{apps,logs,certs}
-success "Data directories created at ~/.pdmanager/ (legacy compatibility path)"
-info "  Tip: place your SSL certificates in ~/.pdmanager/certs/ for easy discovery"
-
-# ── Maintenance pages dir (nginx serves static HTML from here) ────────────────
-if command -v nginx &>/dev/null; then
-  sudo mkdir -p /var/www/cloudbase/maintenance
-  sudo chmod 755 /var/www/cloudbase/maintenance
-  success "Maintenance pages directory created at /var/www/cloudbase/maintenance/"
-fi
-
-# ── Systemd service ───────────────────────────────────────────────────────────
 if command -v systemctl &>/dev/null; then
-  echo ""
   USER_NAME="${SUDO_USER:-$(id -un)}"
   SERVICE_FILE="/etc/systemd/system/${SERVICE_NAME}.service"
   START_SH="$SCRIPT_DIR/start.sh"
-  info "Installing systemd service…"
+  info "Installing systemd service"
   sudo tee "$SERVICE_FILE" > /dev/null <<EOF
 [Unit]
 Description=${APP_NAME}
@@ -189,7 +213,7 @@ After=network.target
 Type=simple
 User=$USER_NAME
 WorkingDirectory=$SCRIPT_DIR
-ExecStart=/bin/bash $START_SH up
+ExecStart=/bin/bash $START_SH run
 Restart=on-failure
 RestartSec=5
 KillMode=none
@@ -202,14 +226,18 @@ EOF
   sudo systemctl daemon-reload
   sudo systemctl enable --now "${SERVICE_NAME}.service"
   success "Systemd service installed, enabled and started (${SERVICE_NAME}.service)"
-  info "  Manage with: ${CLI_NAME} status"
-  info "  Disable boot: ${CLI_NAME} disable"
 else
-  warn "systemd was not detected. CLI was installed, but boot autostart was skipped."
+  warn "systemd was not detected. Cloudbase was installed without boot autostart."
 fi
 
-echo -e "\n${GREEN}${BOLD}Installation complete!${RESET}"
-echo -e "\nCLI:         ${BOLD}${CLI_NAME} up${RESET}"
-echo -e "Status:      ${BOLD}${CLI_NAME} status${RESET}"
-echo -e "Autostart:   ${BOLD}${CLI_NAME} enable${RESET}"
-echo -e "Open:        ${BLUE}http://localhost:7823${RESET}\n"
+printf '\n%b' "$GREEN$BOLD"
+echo "Installation complete"
+printf '%b\n' "$RESET"
+echo "Start:      ${CLI_NAME} start"
+echo "Stop:       ${CLI_NAME} stop"
+echo "Status:     ${CLI_NAME} status"
+echo "Logs:       ${CLI_NAME} logs"
+echo "Autostart:  ${CLI_NAME} enable"
+echo "Nginx:      ${CLI_NAME} nginx setup panel.example.com /path/to/fullchain.pem /path/to/privkey.pem"
+echo "Certs:      ${CLI_NAME} cert add /path/to/fullchain.pem"
+echo "Open:       http://localhost:7823"

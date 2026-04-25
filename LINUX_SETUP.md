@@ -29,20 +29,37 @@ Dit doet het volgende:
 ## 3. De service gebruiken
 
 ```bash
-cloudbase up
+cloudbase start
 cloudbase status
 ```
 
 Handige extra commands:
 
 ```bash
+cloudbase stop
 cloudbase logs
 cloudbase enable
 cloudbase disable
 cloudbase restart
 ```
 
-## 4. Open de app
+## 4. Lokaal nginx en SSL instellen
+
+Ook zonder web-UI kun je Cloudbase lokaal koppelen aan nginx en certificaten:
+
+```bash
+cloudbase cert add /etc/letsencrypt/live/panel/fullchain.pem
+cloudbase cert add /etc/letsencrypt/live/panel/privkey.pem
+cloudbase nginx setup panel.example.com fullchain.pem privkey.pem
+```
+
+Of zonder SSL:
+
+```bash
+cloudbase nginx setup panel.example.com
+```
+
+## 5. Open de app
 
 ```text
 http://<jouw-server-ip>:7823

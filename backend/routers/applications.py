@@ -355,7 +355,7 @@ After=network.target
 Type=simple
 User={user}
 WorkingDirectory={os.path.dirname(os.path.dirname(script_dir))}
-ExecStart=/bin/bash {script_dir} up
+ExecStart=/bin/bash {script_dir} run
 Restart=on-failure
 RestartSec=5
 
