@@ -76,7 +76,7 @@ def _restore_stuck_restart_configs(apps: list[Application]) -> None:
         ok, msg = nm.write_nginx_config(app.name, normal_cfg)
         pm._debug(f"STARTUP nginx recovery result for app {app.id} ({app.name}): ok={ok} msg={msg!r}")
         if ok:
-            pm._push_line(app.id, "Recovered a stale restart page after PDManager startup.")
+            pm._push_line(app.id, "Recovered a stale restart page after Cloudbase startup.")
 
 
 # ── Background stats collector ────────────────────────────────────────────────
@@ -193,7 +193,7 @@ async def lifespan(app: FastAPI):
         password = ''.join(secrets.choice(alphabet) for _ in range(16))
         auth.save_hashed_password(auth.hash_password(password))
         print("\n" + "=" * 60)
-        print("  PDManager — FIRST RUN")
+        print("  Cloudbase — FIRST RUN")
         print(f"  Admin password: {password}")
         print("  Save this — it will not be shown again.")
         print("=" * 60 + "\n")
@@ -364,7 +364,7 @@ async def upload_system_cert(file: UploadFile = File(...)):
     if ext not in allowed_exts:
         raise HTTPException(400, "Only .pem, .crt, .cer, .key files are allowed")
     safe_name = os.path.basename(file.filename or "cert").replace("..", "").lstrip("/")
-    dest_dir = os.path.expanduser("~/.pdmanager/certs")
+    dest_dir = os.path.expanduser("~/.cloudbase/certs")
     os.makedirs(dest_dir, exist_ok=True)
     dest_path = os.path.join(dest_dir, safe_name)
     with open(dest_path, "wb") as f:

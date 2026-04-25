@@ -13,7 +13,7 @@ APP_NAME="Cloudbase"
 CLI_NAME="cloudbase"
 LEGACY_CLI_NAME="pdmanager"
 SERVICE_NAME="cloudbase"
-LOG_DIR="$HOME/.pdmanager/logs"
+LOG_DIR="$HOME/.cloudbase/logs"
 LOG_FILE="$LOG_DIR/cloudbase-install.log"
 
 mkdir -p "$LOG_DIR"
@@ -170,8 +170,18 @@ else
 fi
 
 info "Creating Cloudbase data directories"
-mkdir -p "$HOME/.pdmanager/apps" "$HOME/.pdmanager/logs" "$HOME/.pdmanager/certs"
-success "Data directories ready at ~/.pdmanager"
+mkdir -p "$HOME/.cloudbase/apps" "$HOME/.cloudbase/logs" "$HOME/.cloudbase/certs"
+
+# Migrate data from old ~/.pdmanager if it exists and ~/.cloudbase is fresh
+if [[ -d "$HOME/.pdmanager" && ! -f "$HOME/.cloudbase/cloudbase.db" ]]; then
+  warn "Old ~/.pdmanager detected. Migrating data to ~/.cloudbase"
+  [[ -f "$HOME/.pdmanager/pdmanager.db" ]]  && cp "$HOME/.pdmanager/pdmanager.db"  "$HOME/.cloudbase/cloudbase.db"
+  [[ -f "$HOME/.pdmanager/credentials" ]]    && cp "$HOME/.pdmanager/credentials"    "$HOME/.cloudbase/credentials"
+  [[ -f "$HOME/.pdmanager/secret_key" ]]     && cp "$HOME/.pdmanager/secret_key"     "$HOME/.cloudbase/secret_key"
+  success "Migration complete (old ~/.pdmanager is kept as backup)"
+fi
+
+success "Data directories ready at ~/.cloudbase"
 
 info "Preparing Cloudbase maintenance directory"
 sudo mkdir -p /var/www/cloudbase/maintenance
@@ -185,6 +195,21 @@ source venv/bin/activate
 pip install --quiet --upgrade pip
 pip install --quiet -r requirements.txt
 success "Python dependencies installed"
+
+CREDS="$HOME/.cloudbase/credentials"
+if [[ ! -f "$CREDS" ]]; then
+  info "Generating administrator password"
+  mkdir -p "$(dirname "$CREDS")"
+  CB_PASS=$(python3 -c "import secrets, string; print(''.join(secrets.choice(string.ascii_letters + string.digits + '!@#%^&*') for _ in range(20)))")
+  python3 - <<PYEOF
+import sys
+sys.path.insert(0, '.')
+import auth
+auth.save_hashed_password(auth.hash_password("$CB_PASS"))
+PYEOF
+  printf '%s' "$CB_PASS" > "$HOME/.cloudbase/.first-run-password"
+  success "Administrator credentials saved"
+fi
 
 info "Installing Cloudbase CLI wrapper"
 sudo tee "/usr/local/bin/${CLI_NAME}" > /dev/null <<EOF
@@ -230,14 +255,21 @@ else
   warn "systemd was not detected. Cloudbase was installed without boot autostart."
 fi
 
-printf '\n%b' "$GREEN$BOLD"
-echo "Installation complete"
-printf '%b\n' "$RESET"
-echo "Start:      ${CLI_NAME} start"
-echo "Stop:       ${CLI_NAME} stop"
-echo "Status:     ${CLI_NAME} status"
-echo "Logs:       ${CLI_NAME} logs"
-echo "Autostart:  ${CLI_NAME} enable"
-echo "Nginx:      ${CLI_NAME} nginx setup panel.example.com /path/to/fullchain.pem /path/to/privkey.pem"
-echo "Certs:      ${CLI_NAME} cert add /path/to/fullchain.pem"
-echo "Open:       http://localhost:7823"
+printf '\n'
+printf '%b%s%b\n' "$YELLOW" "================================================================" "$RESET"
+printf '%b  Cloudbase installation complete%b\n' "$BOLD" "$RESET"
+if [[ -n "${CB_PASS:-}" ]]; then
+  printf '%b  Username : admin%b\n' "$BOLD" "$RESET"
+  printf '%b  Password : %b%s%b\n' "$BOLD" "$GREEN" "$CB_PASS" "$RESET"
+fi
+printf '%b  Open at  : http://localhost:7823%b\n' "$BOLD" "$RESET"
+printf '%b%s%b\n' "$YELLOW" "================================================================" "$RESET"
+printf '\n'
+printf 'Commands:\n'
+printf '  %s start     - Start Cloudbase\n' "$CLI_NAME"
+printf '  %s stop      - Stop Cloudbase\n' "$CLI_NAME"
+printf '  %s status    - Show status\n' "$CLI_NAME"
+printf '  %s logs      - View logs\n' "$CLI_NAME"
+printf '  %s nginx <domain> - Set up nginx proxy\n' "$CLI_NAME"
+printf '  %s help      - All commands\n' "$CLI_NAME"
+printf '\n'

@@ -12,7 +12,7 @@ INSTALL_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BACKEND_DIR="$INSTALL_DIR/backend"
 VENV_PATH="$BACKEND_DIR/venv"
 PORT=7823
-CREDS="$HOME/.pdmanager/credentials"
+CREDS="$HOME/.cloudbase/credentials"
 APP_NAME="Cloudbase"
 CLI_NAME="cloudbase"
 SERVICE_NAME="cloudbase"
@@ -20,8 +20,8 @@ SERVICE_FILE="/etc/systemd/system/${SERVICE_NAME}.service"
 NGINX_SITE_NAME="cloudbase"
 NGINX_CONFIG_PATH="/etc/nginx/sites-available/${NGINX_SITE_NAME}"
 NGINX_ENABLED_PATH="/etc/nginx/sites-enabled/${NGINX_SITE_NAME}"
-CERTS_DIR="$HOME/.pdmanager/certs"
-LOG_DIR="$HOME/.pdmanager/logs"
+CERTS_DIR="$HOME/.cloudbase/certs"
+LOG_DIR="$HOME/.cloudbase/logs"
 CLI_LOG_FILE="$LOG_DIR/cloudbase-cli.log"
 COMMAND="${1:-start}"
 
@@ -69,6 +69,14 @@ Core commands:
   logs             Show Cloudbase service logs
   enable           Install or refresh systemd autostart and enable it now
   disable          Disable systemd autostart and stop the service
+  update           Pull latest changes, reinstall deps and restart
+
+Account commands:
+  password         Change the administrator password
+
+Data commands:
+  export [file]    Export database + credentials to a .tar.gz archive
+  import <file>    Restore database + credentials from a .tar.gz archive
 
 Nginx commands:
   nginx <domain>   Set up nginx reverse proxy for the given domain
@@ -79,12 +87,6 @@ Certificate commands:
   cert add <source_path> [target_name]
   cert list
   cert path
-
-Examples:
-  cloudbase start
-  cloudbase enable
-  cloudbase nginx panel.example.com
-  cloudbase cert add /etc/letsencrypt/live/panel/fullchain.pem
 EOF
 }
 
@@ -224,6 +226,23 @@ stop_foreground_instance() {
     info "Stopping process on port $PORT (pid $old_pid)"
     kill -9 "$old_pid" 2>/dev/null || sudo kill -9 "$old_pid" || true
     success "Cloudbase process stopped"
+}
+
+show_first_run_password() {
+    local pw_file="$HOME/.cloudbase/.first-run-password"
+    [[ -f "$pw_file" ]] || return 0
+    local pass
+    pass=$(cat "$pw_file")
+    rm -f "$pw_file"
+    printf '\n'
+    printf '%b%s%b\n' "$YELLOW" "================================================================" "$RESET"
+    printf '%b  FIRST RUN — Administrator password%b\n' "$BOLD" "$RESET"
+    printf '%b  Username : admin%b\n' "$BOLD" "$RESET"
+    printf '%b  Password : %b%s%b\n' "$BOLD" "$GREEN" "$pass" "$RESET"
+    printf '%b  Login at : http://localhost:%s%b\n' "$BOLD" "$PORT" "$RESET"
+    printf '%b  Change it via Settings in the UI after login.%b\n' "$BOLD" "$RESET"
+    printf '%b%s%b\n' "$YELLOW" "================================================================" "$RESET"
+    printf '\n'
 }
 
 show_logs() {
@@ -417,6 +436,99 @@ handle_cert_command() {
     esac
 }
 
+cmd_password() {
+    local new_pass
+    read -r -s -p "New password: " new_pass
+    printf '\n'
+    if [[ ${#new_pass} -lt 8 ]]; then
+        err "Password must be at least 8 characters"
+        exit 1
+    fi
+    local confirm
+    read -r -s -p "Confirm password: " confirm
+    printf '\n'
+    if [[ "$new_pass" != "$confirm" ]]; then
+        err "Passwords do not match"
+        exit 1
+    fi
+    cd "$BACKEND_DIR"
+    "$VENV_PATH/bin/python3" - <<PYEOF
+import sys
+sys.path.insert(0, '.')
+import auth
+auth.save_hashed_password(auth.hash_password("$new_pass"))
+PYEOF
+    success "Password updated"
+}
+
+cmd_export() {
+    local out="${1:-cloudbase-backup-$(date +%Y%m%d-%H%M%S).tar.gz}"
+    local data_dir="$HOME/.cloudbase"
+    local tmp_dir
+    tmp_dir=$(mktemp -d)
+    mkdir -p "$tmp_dir/cloudbase"
+    [[ -f "$data_dir/cloudbase.db" ]]  && cp "$data_dir/cloudbase.db"  "$tmp_dir/cloudbase/"
+    [[ -f "$data_dir/credentials" ]]   && cp "$data_dir/credentials"   "$tmp_dir/cloudbase/"
+    [[ -f "$data_dir/secret_key" ]]    && cp "$data_dir/secret_key"    "$tmp_dir/cloudbase/"
+    if [[ -d "$data_dir/certs" ]]; then
+        cp -r "$data_dir/certs" "$tmp_dir/cloudbase/"
+    fi
+    tar -czf "$out" -C "$tmp_dir" cloudbase
+    rm -rf "$tmp_dir"
+    success "Export saved to $out"
+}
+
+cmd_import() {
+    local src="${1:-}"
+    if [[ -z "$src" || ! -f "$src" ]]; then
+        err "Usage: cloudbase import <backup.tar.gz>"
+        exit 1
+    fi
+    local data_dir="$HOME/.cloudbase"
+    local tmp_dir
+    tmp_dir=$(mktemp -d)
+    tar -xzf "$src" -C "$tmp_dir"
+    local src_dir="$tmp_dir/cloudbase"
+    if [[ ! -d "$src_dir" ]]; then
+        err "Invalid backup archive: missing cloudbase/ directory"
+        rm -rf "$tmp_dir"
+        exit 1
+    fi
+    mkdir -p "$data_dir"
+    [[ -f "$src_dir/cloudbase.db" ]] && cp "$src_dir/cloudbase.db" "$data_dir/" && success "Database restored"
+    [[ -f "$src_dir/credentials" ]]  && cp "$src_dir/credentials"  "$data_dir/" && chmod 600 "$data_dir/credentials"
+    [[ -f "$src_dir/secret_key" ]]   && cp "$src_dir/secret_key"   "$data_dir/" && chmod 600 "$data_dir/secret_key"
+    if [[ -d "$src_dir/certs" ]]; then
+        cp -r "$src_dir/certs" "$data_dir/"
+        success "Certificates restored"
+    fi
+    rm -rf "$tmp_dir"
+    success "Import complete — restart Cloudbase to apply: cloudbase restart"
+}
+
+cmd_update() {
+    if ! command -v git >/dev/null 2>&1; then
+        err "git is not installed"
+        exit 1
+    fi
+    info "Pulling latest changes"
+    cd "$INSTALL_DIR"
+    git pull
+    info "Reinstalling Python dependencies"
+    "$VENV_PATH/bin/pip" install --quiet --upgrade pip
+    "$VENV_PATH/bin/pip" install --quiet -r "$BACKEND_DIR/requirements.txt"
+    success "Dependencies updated"
+    info "Restarting Cloudbase"
+    if service_installed && command -v systemctl >/dev/null 2>&1; then
+        sudo systemctl restart "$SERVICE_NAME"
+        success "Cloudbase updated and restarted"
+    else
+        stop_foreground_instance
+        run_runtime
+    fi
+}
+
+
 run_runtime() {
     info "Starting Cloudbase runtime"
 
@@ -459,15 +571,7 @@ import auth
 auth.save_hashed_password(auth.hash_password("$pass"))
 PYEOF
 
-        printf '\n'
-        printf '%b%s%b\n' "$YELLOW" "================================================================" "$RESET"
-        printf '%b  FIRST RUN — Administrator password%b\n' "$BOLD" "$RESET"
-        printf '%b  Username : admin%b\n' "$BOLD" "$RESET"
-        printf '%b  Password : %b%s%b\n' "$BOLD" "$GREEN" "$pass" "$RESET"
-        printf '%b  Login at : http://localhost:%s%b\n' "$BOLD" "$PORT" "$RESET"
-        printf '%b  Change it via Settings in the UI after login.%b\n' "$BOLD" "$RESET"
-        printf '%b%s%b\n' "$YELLOW" "================================================================" "$RESET"
-        printf '\n'
+        printf '%s' "$pass" > "$HOME/.cloudbase/.first-run-password"
     fi
 
     success "Launching Cloudbase on port $PORT"
@@ -521,6 +625,18 @@ case "$COMMAND" in
     logs)
         show_logs
         ;;
+    password)
+        cmd_password
+        ;;
+    export)
+        cmd_export "$@"
+        ;;
+    import)
+        cmd_import "$@"
+        ;;
+    update)
+        cmd_update
+        ;;
     nginx)
         handle_nginx_command "$@"
         ;;
@@ -528,6 +644,7 @@ case "$COMMAND" in
         handle_cert_command "$@"
         ;;
     start)
+        show_first_run_password
         if service_installed && command -v systemctl >/dev/null 2>&1; then
             sudo systemctl start "$SERVICE_NAME"
             success "Cloudbase service started"

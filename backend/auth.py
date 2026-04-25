@@ -1,7 +1,7 @@
 """
-Authentication module for PDManager.
+Authentication module for Cloudbase.
 
-- Passwords are hashed with bcrypt and stored in ~/.pdmanager/credentials
+- Passwords are hashed with bcrypt and stored in ~/.cloudbase/credentials
 - JWTs are signed with HS256, expire after 1 hour
 - Tokens are delivered as httpOnly, SameSite=Strict cookies (not localStorage)
   so they cannot be stolen by XSS attacks
@@ -20,12 +20,12 @@ from fastapi import Cookie, Depends, HTTPException, Request, status
 from jose import JWTError, jwt
 
 # ── Config ────────────────────────────────────────────────────────────────────
-CREDENTIALS_FILE = os.path.expanduser("~/.pdmanager/credentials")
+CREDENTIALS_FILE = os.path.expanduser("~/.cloudbase/credentials")
 TOKEN_EXPIRE_SECONDS = 3600          # 1 hour
 ALGORITHM = "HS256"
 
 # ── Secret key (generated once, stored alongside credentials) ─────────────────
-_SECRET_KEY_FILE = os.path.expanduser("~/.pdmanager/secret_key")
+_SECRET_KEY_FILE = os.path.expanduser("~/.cloudbase/secret_key")
 
 
 def _load_secret_key() -> str:

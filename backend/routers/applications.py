@@ -261,8 +261,8 @@ async def discover_certs():
         "/etc/nginx/ssl/*.crt",
         "/etc/nginx/certs/*.pem",
         "/etc/nginx/certs/*.crt",
-        os.path.expanduser("~/.pdmanager/certs/*.pem"),
-        os.path.expanduser("~/.pdmanager/certs/*.crt"),
+        os.path.expanduser("~/.cloudbase/certs/*.pem"),
+        os.path.expanduser("~/.cloudbase/certs/*.crt"),
     ]
     key_patterns = [
         "/etc/letsencrypt/live/*/privkey.pem",
@@ -270,8 +270,8 @@ async def discover_certs():
         "/etc/ssl/private/*.key",
         "/etc/nginx/ssl/*.key",
         "/etc/nginx/certs/*.key",
-        os.path.expanduser("~/.pdmanager/certs/*.key"),
-        os.path.expanduser("~/.pdmanager/certs/*.pem"),
+        os.path.expanduser("~/.cloudbase/certs/*.key"),
+        os.path.expanduser("~/.cloudbase/certs/*.pem"),
     ]
 
     certs: list[str] = []
@@ -331,7 +331,7 @@ async def upload_app_cert(app_id: int, file: UploadFile = File(...), db: AsyncSe
     if ext not in allowed_exts:
         raise HTTPException(400, "Only .pem, .crt, .cer, .key files are allowed")
     safe_name = os.path.basename(file.filename).replace("..", "").lstrip("/")
-    base = app.working_dir or os.path.expanduser(f"~/.pdmanager/certs/{app.name}")
+    base = app.working_dir or os.path.expanduser(f"~/.cloudbase/certs/{app.name}")
     dest_dir = os.path.join(base, "certs")
     os.makedirs(dest_dir, exist_ok=True)
     dest_path = os.path.join(dest_dir, safe_name)

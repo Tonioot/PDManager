@@ -537,7 +537,7 @@ def _update_template(title: str, message: str, color: str, status_url: str = Non
 
 
 
-    """Write downtime.html and update.html to /var/www/pdmanager/maintenance/{app_id}/."""
+    """Write downtime.html and update.html to /var/www/cloudbase/maintenance/{app_id}/."""
     app_dir = os.path.join(MAINTENANCE_DIR, str(app_id))
     log.info("[maint-files] writing to %s", app_dir)
     try:
@@ -779,7 +779,7 @@ def config_uses_starting_page(content: str) -> bool:
 
 
 def write_maintenance_files(app_id: int, downtime_html: str, update_html: str, restart_html: str = None, starting_html: str = None) -> tuple[bool, str]:
-    """Write downtime.html, update.html (and optionally restart.html, starting.html) to /var/www/pdmanager/maintenance/{app_id}/."""
+    """Write downtime.html, update.html (and optionally restart.html, starting.html) to /var/www/cloudbase/maintenance/{app_id}/."""
     app_dir = os.path.join(MAINTENANCE_DIR, str(app_id))
     log.info("[maint-files] writing to %s", app_dir)
     try:

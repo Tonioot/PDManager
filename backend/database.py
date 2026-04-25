@@ -2,10 +2,10 @@ from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sess
 from sqlalchemy.orm import DeclarativeBase
 import os
 
-DATA_DIR = os.path.expanduser("~/.pdmanager")
+DATA_DIR = os.path.expanduser("~/.cloudbase")
 os.makedirs(DATA_DIR, exist_ok=True)
 
-DATABASE_URL = f"sqlite+aiosqlite:///{DATA_DIR}/pdmanager.db"
+DATABASE_URL = f"sqlite+aiosqlite:///{DATA_DIR}/cloudbase.db"
 
 engine = create_async_engine(DATABASE_URL, echo=False)
 AsyncSessionLocal = async_sessionmaker(engine, expire_on_commit=False)
