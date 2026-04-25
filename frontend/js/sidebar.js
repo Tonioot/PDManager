@@ -123,7 +123,7 @@ function wirePDManagerNginxButton() {
     try {
       const res = await api.applyPDManagerNginx({ domain, ssl_cert_path: cert, ssl_key_path: key });
       if (res.ok) {
-        showMsg(msg, `Nginx configured — PDManager reachable at ${cert ? 'https' : 'http'}://${domain}`, true);
+        showMsg(msg, `Nginx configured — Cloudbase reachable at ${cert ? 'https' : 'http'}://${domain}`, true);
       } else {
         showMsg(msg, res.message, false);
       }
@@ -155,9 +155,9 @@ function wireServiceButton() {
       modal.className = 'dialog-backdrop';
       modal.innerHTML = `
         <div class="dialog" style="max-width:560px;width:90%">
-          <div class="dialog-title">Install systemd Service</div>
+          <div class="dialog-title">Enable Cloudbase Auto Start</div>
           <div class="dialog-body" style="font-size:13px;line-height:1.6">
-            <p style="margin:0 0 10px">Run these commands to make PDManager start automatically on boot:</p>
+            <p style="margin:0 0 10px">Run this command to make Cloudbase start automatically on boot:</p>
             <pre id="service-pre-global" style="background:var(--bg-muted);border:1px solid var(--border);border-radius:6px;padding:12px;font-size:12px;overflow-x:auto;white-space:pre;margin:0 0 12px">Loading…</pre>
             <p style="margin:0;color:var(--text-muted);font-size:12px">Requires <code>sudo</code>. Run once on your Linux server.</p>
           </div>
@@ -183,15 +183,16 @@ function wireServiceButton() {
     try {
       const data = await api.serviceFile();
       pre.textContent = [
-        `# 1. Create the service file`,
-        `sudo tee /etc/systemd/system/pdmanager.service << 'EOF'`,
+        `# Fastest option`,
+        `cloudbase enable`,
+        ``,
+        `# Manual systemd setup`,
+        `sudo tee ${data.path} << 'EOF'`,
         data.content.trim(),
         `EOF`,
         ``,
-        `# 2. Enable and start`,
         `sudo systemctl daemon-reload`,
-        `sudo systemctl enable pdmanager`,
-        `sudo systemctl start pdmanager`,
+        `sudo systemctl enable --now cloudbase`,
       ].join('\n');
     } catch (e) {
       pre.textContent = `Error: ${e.message}`;

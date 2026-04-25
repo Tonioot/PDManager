@@ -14,8 +14,49 @@ warn()    { echo -e "${YELLOW}[WARN]${RESET} $1"; }
 err()     { echo -e "${RED}[ERR]${RESET}  $1"; }
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+APP_NAME="Cloudbase"
+CLI_NAME="cloudbase"
+LEGACY_CLI_NAME="pdmanager"
+SERVICE_NAME="cloudbase"
 
-echo -e "\n${BOLD}Process & Deployment Manager — Installer${RESET}\n"
+usage() {
+  cat <<'EOF'
+Usage: ./install.sh
+
+Cloudbase always installs the full Linux stack:
+  - system packages
+  - nginx
+  - Python virtual environment
+  - /usr/local/bin/cloudbase CLI
+  - systemd service with boot autostart
+
+Supported legacy flags (now optional and ignored):
+  -y, --yes, --with-nginx, --with-service, --with-cli
+  -h, --help
+EOF
+}
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    -y|--yes|--with-nginx|--with-service|--with-cli)
+      warn "Ignoring legacy flag '$1' - Cloudbase install is now always full-stack."
+      ;;
+    -h|--help)
+      usage
+      exit 0
+      ;;
+    *)
+      err "Unknown option: $1"
+      echo ""
+      usage
+      exit 1
+      ;;
+  esac
+  shift
+done
+
+echo -e "\n${BOLD}${APP_NAME} — Installer${RESET}\n"
+info "Running full Cloudbase installation..."
 
 # ── Detect package manager ────────────────────────────────────────────────────
 PKG_MGR=""
@@ -26,12 +67,28 @@ elif command -v pacman  &>/dev/null; then PKG_MGR="pacman"
 elif command -v zypper  &>/dev/null; then PKG_MGR="zypper"
 fi
 
+ensure_pkg_index() {
+  if [[ -n "${PKG_INDEX_READY:-}" ]]; then
+    return
+  fi
+  case "$PKG_MGR" in
+    apt)
+      info "Refreshing apt package index…"
+      sudo apt-get update
+      ;;
+  esac
+  PKG_INDEX_READY=1
+}
+
 install_pkg() {
   # usage: install_pkg <display-name> <apt-pkg> <dnf-pkg> <pacman-pkg> <zypper-pkg>
   local name="$1" apt_pkg="$2" dnf_pkg="$3" pac_pkg="$4" zy_pkg="$5"
   info "Installing $name…"
   case "$PKG_MGR" in
-    apt)    sudo apt-get install -y "$apt_pkg" ;;
+    apt)
+      ensure_pkg_index
+      sudo apt-get install -y $apt_pkg
+      ;;
     dnf)    sudo dnf install -y "$dnf_pkg" ;;
     yum)    sudo yum install -y "$dnf_pkg" ;;
     pacman) sudo pacman -S --noconfirm "$pac_pkg" ;;
@@ -58,7 +115,14 @@ fi
 # python3-venv is a separate package on Debian/Ubuntu
 if [[ "$PKG_MGR" == "apt" ]] && ! python3 -m venv --help &>/dev/null 2>&1; then
   info "Installing python3-venv…"
+  ensure_pkg_index
   sudo apt-get install -y python3-venv
+fi
+
+if command -v lsof &>/dev/null; then
+  success "lsof found"
+else
+  install_pkg "lsof" "lsof" "lsof" "lsof" "lsof"
 fi
 
 # ── Git ───────────────────────────────────────────────────────────────────────
@@ -68,17 +132,11 @@ else
   install_pkg "Git" "git" "git" "git" "git"
 fi
 
-# ── Nginx (optional) ──────────────────────────────────────────────────────────
+# ── Nginx ─────────────────────────────────────────────────────────────────────
 if command -v nginx &>/dev/null; then
-  success "Nginx found — domain/SSL features available"
+  success "Nginx found"
 else
-  warn "Nginx not installed — domain/SSL features will be disabled."
-  read -rp "  Install Nginx now? [y/N] " ans
-  if [[ "$ans" =~ ^[Yy]$ ]]; then
-    install_pkg "Nginx" "nginx" "nginx" "nginx" "nginx"
-  else
-    warn "Skipping Nginx — you can install it later with your package manager"
-  fi
+  install_pkg "Nginx" "nginx" "nginx" "nginx" "nginx"
 fi
 
 # ── Python venv & deps ────────────────────────────────────────────────────────
@@ -90,36 +148,48 @@ pip install --quiet --upgrade pip
 pip install --quiet -r requirements.txt
 success "Python dependencies installed"
 
+info "Installing ${CLI_NAME} CLI wrapper…"
+sudo tee "/usr/local/bin/${CLI_NAME}" > /dev/null <<EOF
+#!/usr/bin/env bash
+exec /bin/bash "$SCRIPT_DIR/start.sh" "\$@"
+EOF
+sudo chmod 755 "/usr/local/bin/${CLI_NAME}"
+sudo tee "/usr/local/bin/${LEGACY_CLI_NAME}" > /dev/null <<EOF
+#!/usr/bin/env bash
+exec /usr/local/bin/${CLI_NAME} "\$@"
+EOF
+sudo chmod 755 "/usr/local/bin/${LEGACY_CLI_NAME}"
+success "CLI installed — run: ${CLI_NAME} up"
+
 # ── Data dirs ─────────────────────────────────────────────────────────────────
 mkdir -p ~/.pdmanager/{apps,logs,certs}
-success "Data directories created at ~/.pdmanager/"
+success "Data directories created at ~/.pdmanager/ (legacy compatibility path)"
 info "  Tip: place your SSL certificates in ~/.pdmanager/certs/ for easy discovery"
 
 # ── Maintenance pages dir (nginx serves static HTML from here) ────────────────
 if command -v nginx &>/dev/null; then
-  sudo mkdir -p /var/www/pdmanager/maintenance
-  sudo chmod 755 /var/www/pdmanager/maintenance
-  success "Maintenance pages directory created at /var/www/pdmanager/maintenance/"
+  sudo mkdir -p /var/www/cloudbase/maintenance
+  sudo chmod 755 /var/www/cloudbase/maintenance
+  success "Maintenance pages directory created at /var/www/cloudbase/maintenance/"
 fi
 
-# ── Systemd service (optional) ────────────────────────────────────────────────
-if command -v systemctl &>/dev/null && [[ "$EUID" -ne 0 ]]; then
+# ── Systemd service ───────────────────────────────────────────────────────────
+if command -v systemctl &>/dev/null; then
   echo ""
-  read -rp "Install PDManager as a systemd service (auto-start on boot)? [y/N] " svc
-  if [[ "$svc" =~ ^[Yy]$ ]]; then
-    USER_NAME="$(id -un)"
-    SERVICE_FILE="/etc/systemd/system/pdmanager.service"
-    START_SH="$SCRIPT_DIR/start.sh"
-    sudo tee "$SERVICE_FILE" > /dev/null <<EOF
+  USER_NAME="${SUDO_USER:-$(id -un)}"
+  SERVICE_FILE="/etc/systemd/system/${SERVICE_NAME}.service"
+  START_SH="$SCRIPT_DIR/start.sh"
+  info "Installing systemd service…"
+  sudo tee "$SERVICE_FILE" > /dev/null <<EOF
 [Unit]
-Description=Process & Deployment Manager
+Description=${APP_NAME}
 After=network.target
 
 [Service]
 Type=simple
 User=$USER_NAME
 WorkingDirectory=$SCRIPT_DIR
-ExecStart=/bin/bash $START_SH
+ExecStart=/bin/bash $START_SH up
 Restart=on-failure
 RestartSec=5
 KillMode=none
@@ -129,26 +199,17 @@ Delegate=yes
 [Install]
 WantedBy=multi-user.target
 EOF
-    sudo systemctl daemon-reload
-    sudo systemctl enable pdmanager.service
-    success "Systemd service installed and enabled (pdmanager.service)"
-    info "  Start now: sudo systemctl start pdmanager"
-    info "  Status:    sudo systemctl status pdmanager"
-  fi
-fi
-
-# ── Shell alias (optional) ────────────────────────────────────────────────────
-ALIAS_LINE="alias pdmanager='bash $SCRIPT_DIR/start.sh'"
-if ! grep -qF "pdmanager" ~/.bashrc 2>/dev/null; then
-  read -rp "Add 'pdmanager' alias to ~/.bashrc? [y/N] " alias_ans
-  if [[ "$alias_ans" =~ ^[Yy]$ ]]; then
-    echo "" >> ~/.bashrc
-    echo "# Process & Deployment Manager" >> ~/.bashrc
-    echo "$ALIAS_LINE" >> ~/.bashrc
-    success "Alias added — run 'source ~/.bashrc' or open a new terminal"
-  fi
+  sudo systemctl daemon-reload
+  sudo systemctl enable --now "${SERVICE_NAME}.service"
+  success "Systemd service installed, enabled and started (${SERVICE_NAME}.service)"
+  info "  Manage with: ${CLI_NAME} status"
+  info "  Disable boot: ${CLI_NAME} disable"
+else
+  warn "systemd was not detected. CLI was installed, but boot autostart was skipped."
 fi
 
 echo -e "\n${GREEN}${BOLD}Installation complete!${RESET}"
-echo -e "\nStart with:  ${BOLD}./start.sh${RESET}"
+echo -e "\nCLI:         ${BOLD}${CLI_NAME} up${RESET}"
+echo -e "Status:      ${BOLD}${CLI_NAME} status${RESET}"
+echo -e "Autostart:   ${BOLD}${CLI_NAME} enable${RESET}"
 echo -e "Open:        ${BLUE}http://localhost:7823${RESET}\n"

@@ -343,7 +343,7 @@ async def upload_app_cert(app_id: int, file: UploadFile = File(...), db: AsyncSe
 
 @router.get("/system/service-file")
 async def get_service_file():
-    """Return a systemd unit file for auto-starting PDManager on boot."""
+    """Return a systemd unit file for auto-starting Cloudbase on boot."""
     import getpass
     script_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "start.sh"))
     user = getpass.getuser()
@@ -354,7 +354,8 @@ After=network.target
 [Service]
 Type=simple
 User={user}
-ExecStart=/bin/bash {script_dir}
+WorkingDirectory={os.path.dirname(os.path.dirname(script_dir))}
+ExecStart=/bin/bash {script_dir} up
 Restart=on-failure
 RestartSec=5
 
@@ -363,7 +364,7 @@ WantedBy=multi-user.target
 """
     return {
         "content": content,
-        "path": "/etc/systemd/system/pdmanager.service",
+        "path": "/etc/systemd/system/cloudbase.service",
     }
 
 
