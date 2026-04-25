@@ -210,17 +210,17 @@
 <!-- Cloudbase nginx modal -->
 <!-- Manage users modal -->
 <div id="users-modal" style="display:none" class="dialog-backdrop">
-  <div class="dialog" style="max-width:480px;width:90%">
+  <div class="dialog users-dialog">
     <div class="dialog-title">Manage Users</div>
     <form id="users-form" onsubmit="return false;">
-    <div class="dialog-body" style="display:flex;flex-direction:column;gap:16px">
-      <div id="users-list" style="display:flex;flex-direction:column;gap:6px"></div>
+    <div class="dialog-body users-modal-body">
+      <div id="users-list" class="users-list"></div>
       <hr style="border:none;border-top:1px solid var(--border);margin:0" />
-      <div style="font-size:12px;font-weight:600;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.5px">Add User</div>
+      <div class="users-section-title">Add User</div>
       <div style="display:flex;flex-direction:column;gap:10px">
-        <div style="display:flex;gap:8px">
-          <input class="input" id="new-user-name" placeholder="Username" style="flex:1" />
-          <select class="input" id="new-user-role" style="width:110px;cursor:pointer">
+        <div class="users-form-grid">
+          <input class="input" id="new-user-name" placeholder="Username" />
+          <select class="input" id="new-user-role" style="cursor:pointer">
             <option value="viewer">Viewer</option>
             <option value="admin">Admin</option>
           </select>
@@ -297,8 +297,12 @@
   // Guard: redirect to login if not authenticated
   let _authInfo;
   try { _authInfo = await api.checkAuth(); } catch { location.href = '/login.html'; }
-  if (_authInfo && _authInfo.role === 'admin') {
-    document.getElementById('btn-manage-users').style.display = '';
+  const isAdmin = !!(_authInfo && _authInfo.role === 'admin');
+  if (isAdmin) document.getElementById('btn-manage-users').style.display = '';
+  else {
+    document.getElementById('btn-manage-users').remove();
+    const modal = document.getElementById('users-modal');
+    if (modal) modal.remove();
   }
 
   if (_authInfo) {
@@ -342,69 +346,119 @@
     }
   });
 
-  // Manage users modal
-  const usersModal = document.getElementById('users-modal');
-  const usersError = document.getElementById('users-error');
+  if (isAdmin) {
+    // Fallback to direct fetch if browser still has an older cached api.js object.
+    const parseError = async res => {
+      const data = await res.json().catch(() => ({}));
+      throw new Error(data.detail || `HTTP ${res.status}`);
+    };
+    const userApi = {
+      list: () => (typeof api.listUsers === 'function'
+        ? api.listUsers()
+        : fetch('/api/auth/users', { credentials: 'same-origin' }).then(async res => {
+            if (!res.ok) await parseError(res);
+            return res.json().catch(() => []);
+          })),
+      create: payload => (typeof api.createUser === 'function'
+        ? api.createUser(payload)
+        : fetch('/api/auth/users', {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+          }).then(async res => {
+            if (!res.ok) await parseError(res);
+            return res.json().catch(() => ({}));
+          })),
+      remove: id => (typeof api.deleteUser === 'function'
+        ? api.deleteUser(id)
+        : fetch(`/api/auth/users/${id}`, {
+            method: 'DELETE',
+            credentials: 'same-origin'
+          }).then(async res => {
+            if (!res.ok) await parseError(res);
+            return res.json().catch(() => ({}));
+          }))
+    };
 
-  async function renderUsersList() {
-    const list = document.getElementById('users-list');
-    list.innerHTML = '<div style="font-size:12px;color:var(--text-secondary)">Loading…</div>';
-    try {
-      const users = await api.listUsers();
-      if (!users.length) { list.innerHTML = '<div style="font-size:12px;color:var(--text-secondary)">No users yet.</div>'; return; }
-      list.innerHTML = '';
-      users.forEach(u => {
-        const row = document.createElement('div');
-        row.style.cssText = 'display:flex;align-items:center;gap:8px;padding:7px 10px;border-radius:6px;background:var(--bg-secondary);font-size:13px;';
-        const roleBadge = `<span style="font-size:11px;padding:2px 7px;border-radius:4px;font-weight:600;background:${u.role==='admin'?'var(--blue-bg)':'var(--bg-tertiary)'};color:${u.role==='admin'?'var(--blue)':'var(--text-secondary)'};">${u.role}</span>`;
-        const isMe = u.username === _authInfo.username;
-        row.innerHTML = `<span style="flex:1;font-weight:500">${u.username}</span>${roleBadge}${isMe ? '<span style="font-size:11px;color:var(--text-tertiary)">(you)</span>' : `<button data-uid="${u.id}" class="btn-delete-user" style="background:none;border:none;cursor:pointer;color:var(--red);padding:2px 4px;border-radius:4px;" title="Delete user"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg></button>`}`;
-        list.appendChild(row);
-      });
-      list.querySelectorAll('.btn-delete-user').forEach(btn => {
-        btn.addEventListener('click', async () => {
-          if (!confirm(`Delete user?`)) return;
-          try { await api.deleteUser(btn.dataset.uid); await renderUsersList(); }
-          catch (e) { usersError.textContent = e.message; usersError.style.display = 'block'; }
+    const usersModal = document.getElementById('users-modal');
+    const usersError = document.getElementById('users-error');
+    const usersList = document.getElementById('users-list');
+
+    async function renderUsersList() {
+      usersList.innerHTML = '<div class="users-list-empty">Loading users...</div>';
+      try {
+        const users = await userApi.list();
+        if (!users.length) {
+          usersList.innerHTML = '<div class="users-list-empty">No users configured yet.</div>';
+          return;
+        }
+        usersList.innerHTML = users.map(u => {
+          const self = u.username === _authInfo.username;
+          return `<div class="user-row">
+            <div class="user-name-wrap">
+              <span class="user-initial">${(u.username || '?').slice(0,1).toUpperCase()}</span>
+              <div class="user-name" title="${u.username}">${u.username}</div>
+              ${self ? '<span class="user-self">(you)</span>' : ''}
+            </div>
+            <span class="role-pill ${u.role === 'admin' ? 'admin' : ''}">${u.role}</span>
+            ${self ? '<span></span>' : `<button class="btn-user-delete" data-uid="${u.id}" title="Delete ${u.username}">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
+            </button>`}
+          </div>`;
+        }).join('');
+
+        usersList.querySelectorAll('.btn-user-delete').forEach(btn => {
+          btn.addEventListener('click', async () => {
+            if (!confirm('Delete this user?')) return;
+            usersError.style.display = 'none';
+            try {
+              await userApi.remove(btn.dataset.uid);
+              await renderUsersList();
+            } catch (e) {
+              usersError.textContent = e.message;
+              usersError.style.display = 'block';
+            }
+          });
         });
-      });
-    } catch (e) {
-      list.innerHTML = `<div style="font-size:12px;color:var(--red)">${e.message}</div>`;
+      } catch (e) {
+        usersList.innerHTML = `<div class="users-list-empty" style="color:var(--red);border-color:var(--red-border);background:var(--red-bg)">${e.message}</div>`;
+      }
     }
-  }
 
-  document.getElementById('btn-manage-users').addEventListener('click', () => {
-    document.getElementById('new-user-name').value = '';
-    document.getElementById('new-user-pwd').value = '';
-    document.getElementById('new-user-role').value = 'viewer';
-    usersError.style.display = 'none';
-    usersModal.style.display = 'flex';
-    renderUsersList();
-  });
-  document.getElementById('users-close').addEventListener('click', () => { usersModal.style.display = 'none'; });
-  usersModal.addEventListener('click', e => { if (e.target === usersModal) usersModal.style.display = 'none'; });
-  document.getElementById('btn-add-user').addEventListener('click', async () => {
-    usersError.style.display = 'none';
-    const username = document.getElementById('new-user-name').value.trim();
-    const password = document.getElementById('new-user-pwd').value;
-    const role     = document.getElementById('new-user-role').value;
-    if (!username) { usersError.textContent = 'Username is required.'; usersError.style.display = 'block'; return; }
-    if (password.length < 8) { usersError.textContent = 'Password must be at least 8 characters.'; usersError.style.display = 'block'; return; }
-    const addBtn = document.getElementById('btn-add-user');
-    addBtn.disabled = true;
-    try {
-      await api.createUser({ username, password, role });
+    document.getElementById('btn-manage-users').addEventListener('click', () => {
       document.getElementById('new-user-name').value = '';
       document.getElementById('new-user-pwd').value = '';
       document.getElementById('new-user-role').value = 'viewer';
-      await renderUsersList();
-    } catch (e) {
-      usersError.textContent = e.message;
-      usersError.style.display = 'block';
-    } finally {
-      addBtn.disabled = false;
-    }
-  });
+      usersError.style.display = 'none';
+      usersModal.style.display = 'flex';
+      renderUsersList();
+    });
+    document.getElementById('users-close').addEventListener('click', () => { usersModal.style.display = 'none'; });
+    usersModal.addEventListener('click', e => { if (e.target === usersModal) usersModal.style.display = 'none'; });
+    document.getElementById('btn-add-user').addEventListener('click', async () => {
+      usersError.style.display = 'none';
+      const username = document.getElementById('new-user-name').value.trim();
+      const password = document.getElementById('new-user-pwd').value;
+      const role = document.getElementById('new-user-role').value;
+      if (!username) { usersError.textContent = 'Username is required.'; usersError.style.display = 'block'; return; }
+      if (password.length < 8) { usersError.textContent = 'Password must be at least 8 characters.'; usersError.style.display = 'block'; return; }
+      const addBtn = document.getElementById('btn-add-user');
+      addBtn.disabled = true;
+      try {
+        await userApi.create({ username, password, role });
+        document.getElementById('new-user-name').value = '';
+        document.getElementById('new-user-pwd').value = '';
+        document.getElementById('new-user-role').value = 'viewer';
+        await renderUsersList();
+      } catch (e) {
+        usersError.textContent = e.message;
+        usersError.style.display = 'block';
+      } finally {
+        addBtn.disabled = false;
+      }
+    });
+  }
   }
 </script>
 </body>
