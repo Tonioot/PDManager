@@ -59,7 +59,7 @@ EOF
 
 usage() {
     cat <<'EOF'
-Usage: ./start.sh <command> [options]
+Usage: cloudbase <command> [options]
 
 Core commands:
   start            Start Cloudbase
@@ -71,24 +71,19 @@ Core commands:
   disable          Disable systemd autostart and stop the service
 
 Nginx commands:
-  nginx setup <domain> [cert_path] [key_path]
-  nginx show
-  nginx disable
+  nginx <domain>   Set up nginx reverse proxy for the given domain
+  nginx show       Show current nginx config
+  nginx disable    Remove nginx config
 
 Certificate commands:
   cert add <source_path> [target_name]
   cert list
   cert path
 
-Compatibility aliases:
-  up               Alias for start
-  down             Alias for stop
-  autostart        Alias for enable
-
 Examples:
   cloudbase start
   cloudbase enable
-  cloudbase nginx setup panel.example.com fullchain.pem privkey.pem
+  cloudbase nginx panel.example.com
   cloudbase cert add /etc/letsencrypt/live/panel/fullchain.pem
 EOF
 }
@@ -304,29 +299,24 @@ EOF
 nginx_setup() {
     require_nginx
     local domain="${1:-}"
-    local cert_input="${2:-}"
-    local key_input="${3:-}"
     local cert_path=""
     local key_path=""
 
     if [[ -z "$domain" ]]; then
-        err "Usage: cloudbase nginx setup <domain> [cert_path] [key_path]"
+        err "Usage: cloudbase nginx <domain>"
         exit 1
     fi
 
-    if [[ -n "$cert_input" || -n "$key_input" ]]; then
-        if [[ -z "$cert_input" || -z "$key_input" ]]; then
-            err "Provide both certificate and key paths, or neither"
-            exit 1
-        fi
-        cert_path="$(resolve_cert_path "$cert_input")" || {
-            err "Certificate not found: $cert_input"
-            exit 1
-        }
-        key_path="$(resolve_cert_path "$key_input")" || {
-            err "Key not found: $key_input"
-            exit 1
-        }
+    # Auto-detect certificates from the certs directory
+    local auto_cert="$CERTS_DIR/fullchain.pem"
+    local auto_key="$CERTS_DIR/privkey.pem"
+    if [[ -f "$auto_cert" && -f "$auto_key" ]]; then
+        cert_path="$auto_cert"
+        key_path="$auto_key"
+        info "Found SSL certificates in $CERTS_DIR — enabling HTTPS"
+    else
+        info "No SSL certificates found in $CERTS_DIR — setting up HTTP proxy"
+        info "  To enable HTTPS: cloudbase cert add <fullchain.pem> then cloudbase cert add <privkey.pem>"
     fi
 
     info "Writing nginx config for Cloudbase domain '$domain'"
@@ -364,18 +354,19 @@ handle_nginx_command() {
     local subcommand="${1:-}"
     shift || true
     case "$subcommand" in
-        setup)
-            nginx_setup "$@"
-            ;;
         show)
             nginx_show
             ;;
         disable|remove)
             nginx_disable
             ;;
-        *)
-            err "Usage: cloudbase nginx <setup|show|disable>"
+        "")
+            err "Usage: cloudbase nginx <domain>"
             exit 1
+            ;;
+        *)
+            # Treat anything else as a domain name
+            nginx_setup "$subcommand" "$@"
             ;;
     esac
 }
@@ -468,9 +459,15 @@ import auth
 auth.save_hashed_password(auth.hash_password("$pass"))
 PYEOF
 
-        printf '%b\n' "$GREEN$BOLD"
-        echo "First-run administrator password: $pass"
-        printf '%b\n' "$RESET"
+        printf '\n'
+        printf '%b%s%b\n' "$YELLOW" "================================================================" "$RESET"
+        printf '%b  FIRST RUN — Administrator password%b\n' "$BOLD" "$RESET"
+        printf '%b  Username : admin%b\n' "$BOLD" "$RESET"
+        printf '%b  Password : %b%s%b\n' "$BOLD" "$GREEN" "$pass" "$RESET"
+        printf '%b  Login at : http://localhost:%s%b\n' "$BOLD" "$PORT" "$RESET"
+        printf '%b  Change it via Settings in the UI after login.%b\n' "$BOLD" "$RESET"
+        printf '%b%s%b\n' "$YELLOW" "================================================================" "$RESET"
+        printf '\n'
     fi
 
     success "Launching Cloudbase on port $PORT"
@@ -487,7 +484,7 @@ case "$COMMAND" in
         usage
         exit 0
         ;;
-    enable|autostart)
+    enable)
         write_service_file
         sudo systemctl daemon-reload
         sudo systemctl enable --now "$SERVICE_NAME"
@@ -505,13 +502,12 @@ case "$COMMAND" in
     status)
         show_status
         ;;
-    stop|down)
+    stop)
         if service_installed && command -v systemctl >/dev/null 2>&1; then
-            sudo systemctl stop "$SERVICE_NAME"
+            sudo systemctl stop "$SERVICE_NAME" 2>/dev/null || true
             success "Cloudbase service stopped"
-        else
-            stop_foreground_instance
         fi
+        stop_foreground_instance
         ;;
     restart)
         if service_installed && command -v systemctl >/dev/null 2>&1; then
@@ -531,7 +527,7 @@ case "$COMMAND" in
     cert|certs)
         handle_cert_command "$@"
         ;;
-    start|up)
+    start)
         if service_installed && command -v systemctl >/dev/null 2>&1; then
             sudo systemctl start "$SERVICE_NAME"
             success "Cloudbase service started"
