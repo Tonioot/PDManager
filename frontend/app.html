@@ -565,6 +565,7 @@
 <div id="change-pwd-modal" style="display:none" class="dialog-backdrop">
   <div class="dialog" style="max-width:360px;width:90%">
     <div class="dialog-title">Change Admin Password</div>
+    <form id="change-pwd-form" onsubmit="return false;">
     <div class="dialog-body" style="display:flex;flex-direction:column;gap:14px">
       <div class="field" style="margin:0">
         <label class="field-label">New Password <span class="hint">(min 8 chars)</span></label>
@@ -577,9 +578,10 @@
       <div id="pwd-error" style="display:none;font-size:12px;padding:8px 10px;border-radius:6px;background:var(--red-bg);border:1px solid var(--red-border);color:var(--red)"></div>
     </div>
     <div class="dialog-actions">
-      <button class="btn btn-secondary" id="pwd-cancel">Cancel</button>
-      <button class="btn btn-primary" id="pwd-save">Update Password</button>
+      <button type="button" class="btn btn-secondary" id="pwd-cancel">Cancel</button>
+      <button type="button" class="btn btn-primary" id="pwd-save">Update Password</button>
     </div>
+    </form>
   </div>
 </div>
 
@@ -588,6 +590,7 @@
 <div id="users-modal" style="display:none" class="dialog-backdrop">
   <div class="dialog" style="max-width:480px;width:90%">
     <div class="dialog-title">Manage Users</div>
+    <form id="users-form" onsubmit="return false;">
     <div class="dialog-body" style="display:flex;flex-direction:column;gap:16px">
       <div id="users-list" style="display:flex;flex-direction:column;gap:6px"></div>
       <hr style="border:none;border-top:1px solid var(--border);margin:0" />
@@ -602,15 +605,16 @@
         </div>
         <input class="input input-mono" id="new-user-pwd" type="password" placeholder="Password (min 8 chars)" />
         <div id="users-error" style="display:none;font-size:12px;padding:8px 10px;border-radius:6px;background:var(--red-bg);border:1px solid var(--red-border);color:var(--red)"></div>
-        <button class="btn btn-primary" id="btn-add-user" style="align-self:flex-start">
+        <button type="button" class="btn btn-primary" id="btn-add-user" style="align-self:flex-start">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
           Add User
         </button>
       </div>
     </div>
     <div class="dialog-actions">
-      <button class="btn btn-secondary" id="users-close">Close</button>
+      <button type="button" class="btn btn-secondary" id="users-close">Close</button>
     </div>
+    </form>
   </div>
 </div>
 
@@ -670,11 +674,12 @@
 
   // Guard: redirect to login if not authenticated
   let _authInfo;
-  try { _authInfo = await api.checkAuth(); } catch { location.href = '/login.html'; return; }
+  try { _authInfo = await api.checkAuth(); } catch { location.href = '/login.html'; }
   if (_authInfo && _authInfo.role === 'admin') {
     document.getElementById('btn-manage-users').style.display = '';
   }
 
+  if (_authInfo) {
   initApp();
   initSidebar();
 
@@ -791,6 +796,7 @@
     setBar('bar-ram',  data.memory_percent, `${data.memory_percent?.toFixed(0)}%`);
     setBar('bar-disk', data.disk_percent,   `${data.disk_percent?.toFixed(0)}%`);
   });
+  }
 
 </script>
 
