@@ -528,9 +528,17 @@ cmd_update() {
         err "git is not installed"
         exit 1
     fi
-    info "Pulling latest changes"
     cd "$INSTALL_DIR"
-    git pull
+    info "Stashing any local changes"
+    git stash --include-untracked 2>/dev/null || true
+    info "Pulling latest changes"
+    if ! git pull; then
+        err "git pull failed — restoring stash"
+        git stash pop 2>/dev/null || true
+        exit 1
+    fi
+    info "Restoring local changes"
+    git stash pop 2>/dev/null || true
     info "Reinstalling Python dependencies"
     "$VENV_PATH/bin/pip" install --quiet --upgrade pip
     "$VENV_PATH/bin/pip" install --quiet -r "$BACKEND_DIR/requirements.txt"
