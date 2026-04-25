@@ -11,9 +11,9 @@ import psutil
 from collections import deque
 from typing import Optional
 
-APPS_BASE_DIR = os.path.expanduser("~/.pdmanager/apps")
-REGISTRY_PATH = os.path.expanduser("~/.pdmanager/pid_registry.json")
-DEBUG_LOG_PATH = os.path.expanduser("~/.pdmanager/pdmanager-debug.log")
+APPS_BASE_DIR = os.path.expanduser("~/.cloudbase/apps")
+REGISTRY_PATH = os.path.expanduser("~/.cloudbase/pid_registry.json")
+DEBUG_LOG_PATH = os.path.expanduser("~/.cloudbase/cloudbase-debug.log")
 os.makedirs(APPS_BASE_DIR, exist_ok=True)
 
 # Recent lines for history (capped, no tracking issues)
@@ -265,7 +265,7 @@ def get_process_stats(pid: int) -> dict:
 
 
 def get_log_path(app_name: str) -> str:
-    return os.path.join(os.path.expanduser("~/.pdmanager/logs"), f"{_safe_dir_name(app_name)}.log")
+    return os.path.join(os.path.expanduser("~/.cloudbase/logs"), f"{_safe_dir_name(app_name)}.log")
 
 
 def attach_log_tailer(

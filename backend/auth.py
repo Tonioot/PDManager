@@ -70,39 +70,59 @@ def save_hashed_password(hashed: str) -> None:
 
 
 # ── JWT helpers ───────────────────────────────────────────────────────────────
-def create_access_token() -> str:
+def create_access_token(username: str, role: str = "admin") -> str:
     expire = datetime.now(timezone.utc) + timedelta(seconds=TOKEN_EXPIRE_SECONDS)
-    payload = {"sub": "admin", "exp": expire, "iat": datetime.now(timezone.utc)}
+    payload = {
+        "sub": username,
+        "role": role,
+        "exp": expire,
+        "iat": datetime.now(timezone.utc),
+    }
     return jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
 
 
-def decode_token(token: str) -> bool:
-    """Return True if the token is valid and not expired."""
+def _decode_payload(token: str) -> Optional[dict]:
     try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        return payload.get("sub") == "admin"
-    except JWTError:
-        return False
-
-
-def get_token_expires_in(token: str) -> Optional[int]:
-    """Return seconds remaining until token expires, or None if invalid."""
-    try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        if payload.get("sub") != "admin":
-            return None
-        exp = payload.get("exp")
-        if exp is None:
-            return None
-        remaining = int(exp - datetime.now(timezone.utc).timestamp())
-        return max(0, remaining)
+        return jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
     except JWTError:
         return None
 
 
+def decode_token(token: str) -> bool:
+    """Return True if the token is valid and not expired."""
+    payload = _decode_payload(token)
+    return payload is not None and bool(payload.get("sub"))
+
+
+def get_token_username(token: str) -> Optional[str]:
+    payload = _decode_payload(token)
+    if payload is None:
+        return None
+    return payload.get("sub")
+
+
+def get_token_role(token: str) -> Optional[str]:
+    payload = _decode_payload(token)
+    if payload is None:
+        return None
+    return payload.get("role", "viewer")
+
+
+def get_token_expires_in(token: str) -> Optional[int]:
+    """Return seconds remaining until token expires, or None if invalid."""
+    payload = _decode_payload(token)
+    if payload is None or not payload.get("sub"):
+        return None
+    exp = payload.get("exp")
+    if exp is None:
+        return None
+    remaining = int(exp - datetime.now(timezone.utc).timestamp())
+    return max(0, remaining)
+
+
 # ── Rate limiter (in-memory, per IP) ─────────────────────────────────────────
 _login_attempts: dict[str, list[float]] = defaultdict(list)
-MAX_ATTEMPTS = 10
+MAX_ATTEMPTS = 5
 WINDOW_SECONDS = 60
 
 

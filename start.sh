@@ -437,6 +437,7 @@ handle_cert_command() {
 }
 
 cmd_password() {
+    info "Changing password for the admin account"
     local new_pass
     read -r -s -p "New password: " new_pass
     printf '\n'
@@ -453,12 +454,28 @@ cmd_password() {
     fi
     cd "$BACKEND_DIR"
     "$VENV_PATH/bin/python3" - <<PYEOF
-import sys
+import sys, asyncio
 sys.path.insert(0, '.')
+from database import AsyncSessionLocal, init_db
+from models import User
+from sqlalchemy import select
 import auth
-auth.save_hashed_password(auth.hash_password("$new_pass"))
+
+async def run():
+    await init_db()
+    async with AsyncSessionLocal() as db:
+        result = await db.execute(select(User).where(User.username == 'admin'))
+        user = result.scalars().first()
+        if not user:
+            print('No admin user found')
+            return
+        user.hashed_password = auth.hash_password('$new_pass')
+        await db.commit()
+    print('Password updated')
+
+asyncio.run(run())
 PYEOF
-    success "Password updated"
+    success "Admin password updated"
 }
 
 cmd_export() {

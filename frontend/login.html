@@ -155,9 +155,21 @@
   </div>
 
   <h1 class="login-heading">Sign in</h1>
-  <p class="login-subtext">Enter the admin password to continue.</p>
+  <p class="login-subtext">Enter your username and password to continue.</p>
 
   <form id="login-form" autocomplete="off">
+    <div class="form-group">
+      <label class="form-label" for="username">Username</label>
+      <input
+        id="username"
+        class="form-input"
+        type="text"
+        autocomplete="username"
+        placeholder="admin"
+        required
+        autofocus
+      />
+    </div>
     <div class="form-group">
       <label class="form-label" for="password">Password</label>
       <input
@@ -167,7 +179,6 @@
         autocomplete="current-password"
         placeholder="••••••••••••••••"
         required
-        autofocus
       />
     </div>
     <button class="btn-login" type="submit" id="login-btn">Sign in</button>
@@ -179,6 +190,7 @@
   const form   = document.getElementById('login-form');
   const btn    = document.getElementById('login-btn');
   const errEl  = document.getElementById('login-error');
+  const userEl = document.getElementById('username');
   const pwdEl  = document.getElementById('password');
 
   function showError(msg) {
@@ -197,7 +209,7 @@
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'same-origin',
-        body: JSON.stringify({ password: pwdEl.value }),
+        body: JSON.stringify({ username: userEl.value.trim(), password: pwdEl.value }),
       });
 
       if (res.ok) {
@@ -209,7 +221,7 @@
       if (res.status === 429) {
         showError('Too many attempts. Please wait a minute and try again.');
       } else if (res.status === 401) {
-        showError('Incorrect password.');
+        showError('Incorrect username or password.');
         pwdEl.value = '';
         pwdEl.focus();
       } else {
