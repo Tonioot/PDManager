@@ -580,6 +580,8 @@ def generate_config(
     ssl_key: str = None,
     app_id: int = None,
     mode: str = "normal",
+    extra_domains: list = None,
+    redirect_domains: list = None,
 ) -> str:
     """Generate an nginx server block.
 
@@ -589,21 +591,24 @@ def generate_config(
       'update'       -  serve update.html statically (app bypassed)
       'restart'      -  serve restart.html statically (app bypassed)
       'starting'     -  serve starting.html statically (app bypassed)
+
+    extra_domains:    list of additional domains/subdomains served by the same app
+    redirect_domains: list of domains that issue a 301 redirect to the primary domain
     """
     maint_root = f"{MAINTENANCE_DIR}/{app_id}" if app_id else f"{MAINTENANCE_DIR}/0"
 
     if mode == "maintenance":
-        return _static_page_config(domain, maint_root, "downtime.html", ssl_cert, ssl_key)
+        return _static_page_config(domain, maint_root, "downtime.html", ssl_cert, ssl_key, extra_domains, redirect_domains)
     if mode == "update":
-        return _static_page_config(domain, maint_root, "update.html", ssl_cert, ssl_key)
+        return _static_page_config(domain, maint_root, "update.html", ssl_cert, ssl_key, extra_domains, redirect_domains)
     if mode == "restart":
-        return _static_page_config(domain, maint_root, "restart.html", ssl_cert, ssl_key)
+        return _static_page_config(domain, maint_root, "restart.html", ssl_cert, ssl_key, extra_domains, redirect_domains)
     if mode == "starting":
-        return _static_page_config(domain, maint_root, "starting.html", ssl_cert, ssl_key)
-    return _proxy_config(domain, port, maint_root, ssl_cert, ssl_key)
+        return _static_page_config(domain, maint_root, "starting.html", ssl_cert, ssl_key, extra_domains, redirect_domains)
+    return _proxy_config(domain, port, maint_root, ssl_cert, ssl_key, extra_domains, redirect_domains)
 
 
-def _proxy_config(domain: str, port: int, maint_root: str, ssl_cert: str = None, ssl_key: str = None) -> str:
+def _proxy_config(domain: str, port: int, maint_root: str, ssl_cert: str = None, ssl_key: str = None, extra_domains: list = None, redirect_domains: list = None) -> str:
     # NOTE: proxy_intercept_errors must be inside the proxying location block.
     # We use a regular 'internal' location (not named @) so that try_files works.
     # Named locations don't support try_files, which caused the file to not be served.
@@ -632,16 +637,22 @@ def _proxy_config(domain: str, port: int, maint_root: str, ssl_cert: str = None,
         proxy_intercept_errors on;
     }}"""
 
+    # Build server_name lists
+    all_domains = [domain] + [d for d in (extra_domains or []) if d and d != domain]
+    server_name_str = " ".join(all_domains)
+    # Redirect block for domains that should 301 to the primary
+    redirect_blocks = _redirect_server_blocks(redirect_domains or [], domain, ssl_cert, ssl_key)
+
     if ssl_cert and ssl_key:
-        return f"""server {{
+        return f"""{redirect_blocks}server {{
     listen 80;
-    server_name {domain};
+    server_name {server_name_str};
     return 301 https://$host$request_uri;
 }}
 
 server {{
     listen 443 ssl;
-    server_name {domain};
+    server_name {server_name_str};
 
     ssl_certificate "{ssl_cert}";
     ssl_certificate_key "{ssl_key}";
@@ -651,16 +662,16 @@ server {{
 {server_content}
 }}
 """
-    return f"""server {{
+    return f"""{redirect_blocks}server {{
     listen 80;
-    server_name {domain};
+    server_name {server_name_str};
 
 {server_content}
 }}
 """
 
 
-def _static_page_config(domain: str, maint_root: str, filename: str, ssl_cert: str = None, ssl_key: str = None) -> str:
+def _static_page_config(domain: str, maint_root: str, filename: str, ssl_cert: str = None, ssl_key: str = None, extra_domains: list = None, redirect_domains: list = None) -> str:
     # Serve a single static HTML file with a real 503 status.
     # error_page 503 points to an internal location that reads the file;
     # the outer location just triggers the 503 unconditionally.
@@ -680,16 +691,20 @@ def _static_page_config(domain: str, maint_root: str, filename: str, ssl_cert: s
         return 503;
     }}"""
 
+    all_domains = [domain] + [d for d in (extra_domains or []) if d and d != domain]
+    server_name_str = " ".join(all_domains)
+    redirect_blocks = _redirect_server_blocks(redirect_domains or [], domain, ssl_cert, ssl_key)
+
     if ssl_cert and ssl_key:
-        return f"""server {{
+        return f"""{redirect_blocks}server {{
     listen 80;
-    server_name {domain};
+    server_name {server_name_str};
     return 301 https://$host$request_uri;
 }}
 
 server {{
     listen 443 ssl;
-    server_name {domain};
+    server_name {server_name_str};
 
     ssl_certificate "{ssl_cert}";
     ssl_certificate_key "{ssl_key}";
@@ -699,12 +714,49 @@ server {{
 {server_content}
 }}
 """
-    return f"""server {{
+    return f"""{redirect_blocks}server {{
     listen 80;
-    server_name {domain};
+    server_name {server_name_str};
 
 {server_content}
 }}
+"""
+
+
+def _redirect_server_blocks(redirect_domains: list, primary_domain: str, ssl_cert: str = None, ssl_key: str = None) -> str:
+    """Generate server blocks that 301-redirect each domain in redirect_domains to primary_domain."""
+    if not redirect_domains:
+        return ""
+    names = " ".join(d for d in redirect_domains if d)
+    if not names:
+        return ""
+    target = f"https://{primary_domain}$request_uri" if ssl_cert and ssl_key else f"http://{primary_domain}$request_uri"
+    if ssl_cert and ssl_key:
+        return f"""server {{
+    listen 80;
+    server_name {names};
+    return 301 https://{primary_domain}$request_uri;
+}}
+
+server {{
+    listen 443 ssl;
+    server_name {names};
+
+    ssl_certificate "{ssl_cert}";
+    ssl_certificate_key "{ssl_key}";
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_ciphers HIGH:!aNULL:!MD5;
+
+    return 301 {target};
+}}
+
+"""
+    return f"""server {{
+    listen 80;
+    server_name {names};
+    return 301 {target};
+}}
+
 """
 
 

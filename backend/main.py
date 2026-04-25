@@ -246,7 +246,7 @@ async def lifespan(app: FastAPI):
 
 
 # ── App ───────────────────────────────────────────────────────────────────────
-app = FastAPI(title="Process & Deployment Manager", version="1.0.0", lifespan=lifespan)
+app = FastAPI(title="Cloudbase", version="1.0.0", lifespan=lifespan)
 
 # Auth middleware — blocks all /api/ and /ws/ except public paths
 _PUBLIC = {"/api/health", "/api/auth/login", "/api/auth/logout", "/api/auth/check"}
@@ -427,6 +427,10 @@ if os.path.isdir(FRONTEND_DIR):
     @app.get("/favicon.svg", include_in_schema=False)
     async def favicon():
         return FileResponse(os.path.join(FRONTEND_DIR, "favicon.svg"), media_type="image/svg+xml")
+
+    @app.get("/cloudbase.png", include_in_schema=False)
+    async def logo():
+        return FileResponse(os.path.join(FRONTEND_DIR, "cloudbase.png"), media_type="image/png")
 
     @app.get("/login", include_in_schema=False)
     @app.get("/login.html", include_in_schema=False)

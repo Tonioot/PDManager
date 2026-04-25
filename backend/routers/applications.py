@@ -30,6 +30,8 @@ class DeployRequest(BaseModel):
     github_token: Optional[str] = None
     github_token_id: Optional[str] = None   # ID of a saved vault token
     domain: Optional[str] = None
+    extra_domains: Optional[list] = None      # additional domains/subdomains
+    redirect_domains: Optional[list] = None   # domains that redirect to primary
     ssl_cert_path: Optional[str] = None
     ssl_key_path: Optional[str] = None
     start_command: Optional[str] = None
@@ -39,6 +41,8 @@ class DeployRequest(BaseModel):
 
 class UpdateRequest(BaseModel):
     domain: Optional[str] = None
+    extra_domains: Optional[list] = None      # additional domains/subdomains
+    redirect_domains: Optional[list] = None   # domains that redirect to primary
     ssl_cert_path: Optional[str] = None
     ssl_key_path: Optional[str] = None
     start_command: Optional[str] = None
@@ -153,6 +157,8 @@ async def _restore_nginx_after_restart(
     ssl_key_path: Optional[str],
     pid: int,
     started_at: float,
+    extra_domains: list = None,
+    redirect_domains: list = None,
 ) -> None:
     ready, reason = await _wait_for_restart_ready(app_id, pid, port)
     elapsed = max(asyncio.get_running_loop().time() - started_at, 0)
@@ -161,6 +167,8 @@ async def _restore_nginx_after_restart(
         app_name, domain, port,
         ssl_cert_path, ssl_key_path,
         app_id=app_id, mode="normal",
+        extra_domains=extra_domains,
+        redirect_domains=redirect_domains,
     )
     ok, msg = nm.write_nginx_config(app_name, normal_cfg)
     log.info(
@@ -340,7 +348,7 @@ async def get_service_file():
     script_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "start.sh"))
     user = getpass.getuser()
     content = f"""[Unit]
-Description=Process & Deployment Manager
+Description=Cloudbase
 After=network.target
 
 [Service]
@@ -425,6 +433,8 @@ async def deploy_app(req: DeployRequest, background_tasks: BackgroundTasks, db: 
         repo_url=req.repo_url,
         github_token=_resolve_token(req.github_token, req.github_token_id),
         domain=req.domain,
+        extra_domains=json.dumps(req.extra_domains or []),
+        redirect_domains=json.dumps(req.redirect_domains or []),
         ssl_cert_path=req.ssl_cert_path,
         ssl_key_path=req.ssl_key_path,
         start_command=req.start_command,
@@ -445,6 +455,8 @@ async def deploy_app(req: DeployRequest, background_tasks: BackgroundTasks, db: 
                 app.name, app.domain, app.port,
                 app.ssl_cert_path, app.ssl_key_path,
                 app_id=app.id, mode=_get_nginx_mode(app),
+                extra_domains=json.loads(app.extra_domains or "[]"),
+                redirect_domains=json.loads(app.redirect_domains or "[]"),
             )
             ok, msg = nm.write_nginx_config(app.name, config)
             app.nginx_enabled = ok
@@ -473,6 +485,10 @@ async def update_app(app_id: int, req: UpdateRequest, db: AsyncSession = Depends
 
     if req.domain is not None:
         app.domain = req.domain
+    if req.extra_domains is not None:
+        app.extra_domains = json.dumps(req.extra_domains)
+    if req.redirect_domains is not None:
+        app.redirect_domains = json.dumps(req.redirect_domains)
     if req.ssl_cert_path is not None:
         app.ssl_cert_path = req.ssl_cert_path
     if req.ssl_key_path is not None:
@@ -498,6 +514,8 @@ async def update_app(app_id: int, req: UpdateRequest, db: AsyncSession = Depends
             app.name, app.domain, app.port,
             app.ssl_cert_path, app.ssl_key_path,
             app_id=app.id, mode=_get_nginx_mode(app),
+            extra_domains=json.loads(app.extra_domains or "[]"),
+            redirect_domains=json.loads(app.redirect_domains or "[]"),
         )
         ok, _ = nm.write_nginx_config(app.name, config)
         app.nginx_enabled = ok
@@ -547,6 +565,8 @@ async def start_app(app_id: int, db: AsyncSession = Depends(get_db)):
             app.name, app.domain, app.port,
             app.ssl_cert_path, app.ssl_key_path,
             app_id=app_id, mode="starting",
+            extra_domains=json.loads(app.extra_domains or "[]"),
+            redirect_domains=json.loads(app.redirect_domains or "[]"),
         )
         nm.write_nginx_config(app.name, starting_cfg)
         pm._push_line(app_id, "Starting page enabled while the app comes online.")
@@ -564,6 +584,8 @@ async def start_app(app_id: int, db: AsyncSession = Depends(get_db)):
             app.ssl_cert_path, app.ssl_key_path,
             pid,
             start_started_at,
+            json.loads(app.extra_domains or "[]"),
+            json.loads(app.redirect_domains or "[]"),
         ))
 
     await db.commit()
@@ -597,6 +619,8 @@ async def restart_app(app_id: int, db: AsyncSession = Depends(get_db)):
             app.name, app.domain, app.port,
             app.ssl_cert_path, app.ssl_key_path,
             app_id=app_id, mode="restart",
+            extra_domains=json.loads(app.extra_domains or "[]"),
+            redirect_domains=json.loads(app.redirect_domains or "[]"),
         )
         nm.write_nginx_config(app.name, restart_cfg)
         pm._push_line(app_id, "Restart page enabled while the app comes back online.")
@@ -620,6 +644,8 @@ async def restart_app(app_id: int, db: AsyncSession = Depends(get_db)):
             app.ssl_cert_path, app.ssl_key_path,
             pid,
             restart_started_at,
+            json.loads(app.extra_domains or "[]"),
+            json.loads(app.redirect_domains or "[]"),
         ))
 
     await db.commit()
@@ -693,6 +719,8 @@ async def get_nginx_config(app_id: int, db: AsyncSession = Depends(get_db)):
                 app.name, app.domain, app.port,
                 app.ssl_cert_path, app.ssl_key_path,
                 app_id=app.id, mode=_get_nginx_mode(app),
+                extra_domains=json.loads(app.extra_domains or "[]"),
+                redirect_domains=json.loads(app.redirect_domains or "[]"),
             )
         return {"exists": False, "path": config_path, "content": generated, "active": False}
     with open(config_path) as f:
@@ -735,6 +763,8 @@ def _app_to_dict(app: Application) -> dict:
         "name": app.name,
         "repo_url": app.repo_url,
         "domain": app.domain,
+        "extra_domains": json.loads(app.extra_domains or "[]"),
+        "redirect_domains": json.loads(app.redirect_domains or "[]"),
         "app_type": app.app_type,
         "start_command": app.start_command,
         "port": app.port,
@@ -834,6 +864,8 @@ async def save_maintenance_pages(
             app.name, app.domain, app.port,
             app.ssl_cert_path, app.ssl_key_path,
             app_id=app_id, mode=mode,
+            extra_domains=json.loads(app.extra_domains or "[]"),
+            redirect_domains=json.loads(app.redirect_domains or "[]"),
         )
         nginx_ok, nginx_msg = nm.write_nginx_config(app.name, config)
         if not nginx_ok:
@@ -863,6 +895,8 @@ async def toggle_maintenance_mode(app_id: int, db: AsyncSession = Depends(get_db
         app.name, app.domain, app.port,
         app.ssl_cert_path, app.ssl_key_path,
         app_id=app_id, mode=mode,
+        extra_domains=json.loads(app.extra_domains or "[]"),
+        redirect_domains=json.loads(app.redirect_domains or "[]"),
     )
     ok, msg = nm.write_nginx_config(app.name, config)
     log.info("[toggle-maintenance] write_nginx_config ok=%s msg=%r", ok, msg)
@@ -892,6 +926,8 @@ async def toggle_update_mode(app_id: int, db: AsyncSession = Depends(get_db)):
         app.name, app.domain, app.port,
         app.ssl_cert_path, app.ssl_key_path,
         app_id=app_id, mode=mode,
+        extra_domains=json.loads(app.extra_domains or "[]"),
+        redirect_domains=json.loads(app.redirect_domains or "[]"),
     )
     ok, msg = nm.write_nginx_config(app.name, config)
     log.info("[toggle-update] write_nginx_config ok=%s msg=%r", ok, msg)
@@ -1031,5 +1067,7 @@ async def nginx_debug(app_id: int, db: AsyncSession = Depends(get_db)):
             app.name, app.domain or "(no domain)", app.port or 0,
             app.ssl_cert_path, app.ssl_key_path,
             app_id=app_id, mode=_get_nginx_mode(app),
+            extra_domains=json.loads(app.extra_domains or "[]"),
+            redirect_domains=json.loads(app.redirect_domains or "[]"),
         ),
     }

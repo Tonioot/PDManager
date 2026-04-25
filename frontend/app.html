@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>App — PDManager</title>
+  <title>App — Cloudbase</title>
   <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
@@ -19,16 +19,11 @@
   <!-- ─── Sidebar ──────────────────────────────────────────────────────── -->
   <aside class="sidebar">
     <div class="sidebar-logo">
-      <div class="logo-icon">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round">
-          <rect x="2" y="2" width="20" height="8" rx="2"/>
-          <rect x="2" y="14" width="20" height="8" rx="2"/>
-          <line x1="6" y1="6" x2="6.01" y2="6"/>
-          <line x1="6" y1="18" x2="6.01" y2="18"/>
-        </svg>
+      <div class="logo-icon" style="background:none;padding:0;overflow:hidden">
+        <img src="/cloudbase.png" alt="Cloudbase" style="width:36px;height:36px;object-fit:contain;display:block" />
       </div>
       <div class="logo-text">
-        <div class="logo-title">PDManager</div>
+        <div class="logo-title">Cloudbase</div>
         <div class="logo-sub">Deployment Panel</div>
       </div>
     </div>
@@ -76,7 +71,7 @@
       </button>
       <button class="sidebar-footer-btn" id="btn-pdm-nginx">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
-        PDManager Domain &amp; SSL
+        Cloudbase Domain &amp; SSL
       </button>
       <button class="sidebar-footer-btn" id="btn-install-service">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="2" y="2" width="20" height="8" rx="2"/><rect x="2" y="14" width="20" height="8" rx="2"/><line x1="6" y1="6" x2="6.01" y2="6"/><line x1="6" y1="18" x2="6.01" y2="18"/></svg>
@@ -323,6 +318,22 @@
                   <input class="input" id="cfg-domain" placeholder="myapp.example.com" />
                 </div>
                 <div class="field">
+                  <label class="field-label">Extra Domains <span style="font-weight:400;color:var(--text-muted);font-size:11px">(subdomains served by this app)</span></label>
+                  <div id="cfg-extra-domains-rows"></div>
+                  <button type="button" class="btn-scan" id="cfg-add-extra-domain" style="margin-top:6px">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                    Add domain
+                  </button>
+                </div>
+                <div class="field">
+                  <label class="field-label">Redirect Domains <span style="font-weight:400;color:var(--text-muted);font-size:11px">(301 redirect to primary)</span></label>
+                  <div id="cfg-redirect-domains-rows"></div>
+                  <button type="button" class="btn-scan" id="cfg-add-redirect-domain" style="margin-top:6px">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                    Add domain
+                  </button>
+                </div>
+                <div class="field">
                   <label class="field-label">SSL Certificate</label>
                   <div class="cert-upload-row">
                     <span class="cert-filename" id="cfg-cert-name">No file selected</span>
@@ -418,7 +429,7 @@
                       <span class="toggle-slider"></span>
                     </label>
                   </label>
-                  <div class="field-hint">Start this app automatically when PDManager starts</div>
+                  <div class="field-hint">Start this app automatically when Cloudbase starts</div>
                 </div>
                 <div class="field">
                   <label class="field-label">Restart Policy</label>
@@ -572,14 +583,14 @@
   </div>
 </div>
 
-<!-- PDManager nginx modal (same as dashboard) -->
+<!-- Cloudbase nginx modal (same as dashboard) -->
 <div id="pdm-nginx-modal" style="display:none" class="dialog-backdrop">
   <div class="dialog" style="max-width:500px;width:90%">
-    <div class="dialog-title">PDManager — Domain &amp; SSL</div>
+    <div class="dialog-title">Cloudbase — Domain &amp; SSL</div>
     <div class="dialog-body" style="display:flex;flex-direction:column;gap:14px">
       <p style="margin:0;font-size:13px;color:var(--text-secondary)">
-        Set up nginx to serve PDManager under your own domain with optional SSL.
-        PDManager itself runs on port 7823; nginx will proxy it.
+        Set up nginx to serve Cloudbase under your own domain with optional SSL.
+        Cloudbase itself runs on port 7823; nginx will proxy it.
       </p>
       <div class="field" style="margin:0">
         <label class="field-label">Domain <span class="req">*</span></label>

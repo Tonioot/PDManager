@@ -29,14 +29,16 @@ async def init_db():
         existing_columns = {row[1] for row in result.fetchall()}
 
         for col, definition in [
-            ("auto_start",       "BOOLEAN NOT NULL DEFAULT 0"),
-            ("restart_policy",   "VARCHAR(20) NOT NULL DEFAULT 'no'"),
-            ("maintenance_mode", "BOOLEAN NOT NULL DEFAULT 0"),
-            ("update_mode",      "BOOLEAN NOT NULL DEFAULT 0"),
-            ("downtime_page",    "TEXT"),
-            ("update_page",      "TEXT"),
-            ("restart_page",     "TEXT"),
-            ("starting_page",    "TEXT"),
+            ("auto_start",        "BOOLEAN NOT NULL DEFAULT 0"),
+            ("restart_policy",    "VARCHAR(20) NOT NULL DEFAULT 'no'"),
+            ("maintenance_mode",  "BOOLEAN NOT NULL DEFAULT 0"),
+            ("update_mode",       "BOOLEAN NOT NULL DEFAULT 0"),
+            ("downtime_page",     "TEXT"),
+            ("update_page",       "TEXT"),
+            ("restart_page",      "TEXT"),
+            ("starting_page",     "TEXT"),
+            ("extra_domains",     "TEXT"),
+            ("redirect_domains",  "TEXT"),
         ]:
             if col in existing_columns:
                 continue

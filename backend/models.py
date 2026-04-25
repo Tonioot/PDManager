@@ -11,6 +11,8 @@ class Application(Base):
     repo_url = Column(String(500), nullable=False)
     github_token = Column(String(200), nullable=True)
     domain = Column(String(200), nullable=True)
+    extra_domains = Column(Text, nullable=True)     # JSON list of additional domains/subdomains
+    redirect_domains = Column(Text, nullable=True)  # JSON list of domains that redirect to primary
     ssl_cert_path = Column(String(500), nullable=True)
     ssl_key_path = Column(String(500), nullable=True)
     app_type = Column(String(50), nullable=True)

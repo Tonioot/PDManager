@@ -52,7 +52,7 @@ async function refreshApp() {
 function renderHeader() {
   document.getElementById('app-name').textContent = app.name;
   document.getElementById('app-name-crumb').textContent = app.name;
-  document.title = `${app.name} — PDManager`;
+  document.title = `${app.name} — Cloudbase`;
   document.getElementById('app-meta').textContent =
     `${app.app_type || 'unknown'} · Port ${app.port || 'N/A'}`;
 
@@ -584,6 +584,17 @@ function initSettings() {
   document.getElementById('cfg-cmd').value          = app.start_command  || '';
   document.getElementById('cfg-port').value         = app.port           || '';
   document.getElementById('cfg-domain').value       = app.domain         || '';
+
+  // Extra domains (subdomains / additional domains)
+  const extraContainer    = document.getElementById('cfg-extra-domains-rows');
+  const redirectContainer = document.getElementById('cfg-redirect-domains-rows');
+  extraContainer.innerHTML    = '';
+  redirectContainer.innerHTML = '';
+  (app.extra_domains    || []).forEach(d => addDomainRow(extraContainer,    d));
+  (app.redirect_domains || []).forEach(d => addDomainRow(redirectContainer, d));
+  document.getElementById('cfg-add-extra-domain').addEventListener('click',    () => addDomainRow(extraContainer,    ''));
+  document.getElementById('cfg-add-redirect-domain').addEventListener('click', () => addDomainRow(redirectContainer, ''));
+
   document.getElementById('cfg-autostart').checked  = !!app.auto_start;
   document.getElementById('cfg-restart-policy').value = app.restart_policy || 'no';
 
@@ -945,8 +956,17 @@ async function saveMaintenancePage(type) {
   }
 }
 
-function addEnvRow(container, key = '', value = '') {
+function addDomainRow(container, value = '') {
   const row = document.createElement('div');
+  row.className = 'env-row';
+  row.innerHTML = `
+    <input class="input" placeholder="sub.example.com" value="${escAttr(value)}" data-domain-val style="flex:1" />
+    <button type="button" class="btn-remove" title="Remove">${icon.trash}</button>`;
+  row.querySelector('.btn-remove').addEventListener('click', () => row.remove());
+  container.appendChild(row);
+}
+
+function addEnvRow(container, key = '', value = '') {  const row = document.createElement('div');
   row.className = 'env-row';
   row.innerHTML = `
     <input class="input input-mono" placeholder="KEY"   value="${escAttr(key)}"   data-env-key />
@@ -979,6 +999,10 @@ async function saveSettings() {
     start_command:  document.getElementById('cfg-cmd').value.trim()    || null,
     port:           parseInt(document.getElementById('cfg-port').value) || null,
     domain:         document.getElementById('cfg-domain').value.trim() || null,
+    extra_domains:    [...document.querySelectorAll('#cfg-extra-domains-rows [data-domain-val]')]
+                        .map(i => i.value.trim()).filter(Boolean),
+    redirect_domains: [...document.querySelectorAll('#cfg-redirect-domains-rows [data-domain-val]')]
+                        .map(i => i.value.trim()).filter(Boolean),
     ssl_cert_path:  document.getElementById('cfg-cert').value.trim()   || null,
     ssl_key_path:   document.getElementById('cfg-key').value.trim()    || null,
     auto_start:     document.getElementById('cfg-autostart').checked,
