@@ -231,7 +231,8 @@ function initTabs() {
   tabs.forEach(t => {
     document.getElementById(`tab-${t}`).addEventListener('click', () => switchTab(t));
   });
-  switchTab('logs');
+  const saved = sessionStorage.getItem('cloudbase_active_tab');
+  switchTab(tabs.includes(saved) ? saved : 'logs');
 }
 
 let activeTab = null;
@@ -247,6 +248,7 @@ function switchTab(t) {
   }
 
   activeTab = t;
+  sessionStorage.setItem('cloudbase_active_tab', t);
   document.getElementById(`tab-${t}`).classList.add('active');
   document.getElementById(`panel-${t}`).classList.add('active');
   setupTab(t);
@@ -583,16 +585,19 @@ function initSettings() {
   // Form fields
   document.getElementById('cfg-cmd').value          = app.start_command  || '';
   document.getElementById('cfg-port').value         = app.port           || '';
-  document.getElementById('cfg-domain').value       = app.domain         || '';
 
-  // Extra domains (subdomains / additional domains)
-  const extraContainer    = document.getElementById('cfg-extra-domains-rows');
+  // Domains list (primary first, then extras)
+  const domainsContainer = document.getElementById('cfg-domains-rows');
+  domainsContainer.innerHTML = '';
+  const allDomains = [app.domain, ...(app.extra_domains || [])].filter(Boolean);
+  if (allDomains.length === 0) addDomainRow(domainsContainer, '');
+  else allDomains.forEach(d => addDomainRow(domainsContainer, d));
+  document.getElementById('cfg-add-domain').addEventListener('click', () => addDomainRow(domainsContainer, ''));
+
+  // Redirect domains
   const redirectContainer = document.getElementById('cfg-redirect-domains-rows');
-  extraContainer.innerHTML    = '';
   redirectContainer.innerHTML = '';
-  (app.extra_domains    || []).forEach(d => addDomainRow(extraContainer,    d));
   (app.redirect_domains || []).forEach(d => addDomainRow(redirectContainer, d));
-  document.getElementById('cfg-add-extra-domain').addEventListener('click',    () => addDomainRow(extraContainer,    ''));
   document.getElementById('cfg-add-redirect-domain').addEventListener('click', () => addDomainRow(redirectContainer, ''));
 
   document.getElementById('cfg-autostart').checked  = !!app.auto_start;
@@ -995,12 +1000,13 @@ async function saveSettings() {
   const tokenId = document.getElementById('cfg-token-id')?.value?.trim();
   const token   = document.getElementById('cfg-token')?.value?.trim();
 
+  const allDomainInputs = [...document.querySelectorAll('#cfg-domains-rows [data-domain-val]')]
+                            .map(i => i.value.trim()).filter(Boolean);
   const payload = {
     start_command:  document.getElementById('cfg-cmd').value.trim()    || null,
     port:           parseInt(document.getElementById('cfg-port').value) || null,
-    domain:         document.getElementById('cfg-domain').value.trim() || null,
-    extra_domains:    [...document.querySelectorAll('#cfg-extra-domains-rows [data-domain-val]')]
-                        .map(i => i.value.trim()).filter(Boolean),
+    domain:         allDomainInputs[0] || null,
+    extra_domains:  allDomainInputs.slice(1),
     redirect_domains: [...document.querySelectorAll('#cfg-redirect-domains-rows [data-domain-val]')]
                         .map(i => i.value.trim()).filter(Boolean),
     ssl_cert_path:  document.getElementById('cfg-cert').value.trim()   || null,
